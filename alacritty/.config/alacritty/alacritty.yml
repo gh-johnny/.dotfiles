@@ -54,9 +54,6 @@ colors:
     pink: '#f7a6e1'
     white: '#ff00ff'
 
-selection:
-  save_to_cliboard: false
-
 live_config_reload: true
 
 key_bindings:
