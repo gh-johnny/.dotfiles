@@ -1,0 +1,63 @@
+font:
+  normal:
+    family: Roboto Mono Nerd Font 
+    style:  Medium 
+
+  bold:
+    family: Roboto Mono Nerd Font
+    style: Bold
+
+  italic:
+    family: Roboto Mono Nerd Font
+    style: Italic
+
+  bold_italic:
+    family: Roboto Mono Nerd Font
+    style: Bold Italic
+  size: 11
+      
+window: 
+  padding:
+    x: 10
+    y: 5 
+  class: Alacritty
+  general: Alacritty
+  opacity: 0.8
+
+scrolling: 
+  history: 10000
+  multiplier: 3
+
+draw_bold_text_with_bright_colors: true 
+
+# Catppuccin Macchiato (mod)
+colors:
+  primary:
+    background: '#1e2030'
+    foreground: '#cad3f5'
+  normal: 
+    black: '#181926'
+    red: '#ed8796'
+    green: '#a6da95'
+    yellow: '#eed49f'
+    blue: '#8aadf4'
+    purple: '#b487ed'
+    pink: '#f5bde6'
+    white: '#cad3f5'
+  bright:
+    black: '#24273a'
+    red: '#ee99a0'
+    green: '#89d171'
+    yellow: '#f5a97f'
+    blue: '#8bd5ca'
+    purple: '#b788f2'
+    pink: '#f7a6e1'
+    white: '#ff00ff'
+
+selection:
+  save_to_cliboard: false
+
+live_config_reload: true
+
+key_bindings:
+  - { key: Return, mods: Super|Shift, action: SpawnNewInstance }
