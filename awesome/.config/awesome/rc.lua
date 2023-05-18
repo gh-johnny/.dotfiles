@@ -33,13 +33,16 @@ naughty.connect_signal("request::display_error", function(message, startup)
 end)
 -- }}}
 
--- {{{ Variable definitions
+-- {{{ VariaAable definitions
 -- Themes define colours, icons, font and wallpapers.
-beautiful.init(gears.filesystem.get_themes_dir() .. "default/theme.lua")
-
+beautiful.init(gears.filesystem.get_configuration_dir() .. "theme/mytheme.lua")
+beautiful.font = "Roboto Mono Nerd Fonts 10"
+beautiful.useless_gap = 4
+awful.spawn.with_shell("xrandr -s 1360x768")
+awful.spawn.with_shell("~/.config/polybar/launch.sh")
 -- This is used later as the default terminal and editor to run.
-terminal = "xterm"
-editor = os.getenv("EDITOR") or "nano"
+terminal = "alacritty"
+editor = os.getenv("EDITOR") or "vim"
 editor_cmd = terminal .. " -e " .. editor
 
 -- Default modkey.
@@ -76,19 +79,19 @@ menubar.utils.terminal = terminal -- Set the terminal for applications that requ
 -- Table of layouts to cover with awful.layout.inc, order matters.
 tag.connect_signal("request::default_layouts", function()
     awful.layout.append_default_layouts({
-        awful.layout.suit.floating,
+        -- awful.layout.suit.floating,
         awful.layout.suit.tile,
-        awful.layout.suit.tile.left,
-        awful.layout.suit.tile.bottom,
-        awful.layout.suit.tile.top,
-        awful.layout.suit.fair,
-        awful.layout.suit.fair.horizontal,
-        awful.layout.suit.spiral,
-        awful.layout.suit.spiral.dwindle,
-        awful.layout.suit.max,
-        awful.layout.suit.max.fullscreen,
-        awful.layout.suit.magnifier,
-        awful.layout.suit.corner.nw,
+       -- awful.layout.suit.tile.left,
+       -- awful.layout.suit.tile.bottom,
+       -- awful.layout.suit.tile.top,
+       -- awful.layout.suit.fair,
+        -- awful.layout.suit.fair.horizontal,
+        -- awful.layout.suit.spiral,
+        -- awful.layout.suit.spiral.dwindle,
+        -- awful.layout.suit.max,
+        --awful.layout.suit.max.fullscreen,
+        -- awful.layout.suit.magnifier,
+        -- awful.layout.suit.corner.nw,
     })
 end)
 -- }}}
@@ -177,27 +180,27 @@ screen.connect_signal("request::desktop_decoration", function(s)
     }
 
     -- Create the wibox
-    s.mywibox = awful.wibar {
-        position = "top",
-        screen   = s,
-        widget   = {
-            layout = wibox.layout.align.horizontal,
-            { -- Left widgets
-                layout = wibox.layout.fixed.horizontal,
-                mylauncher,
-                s.mytaglist,
-                s.mypromptbox,
-            },
-            s.mytasklist, -- Middle widget
-            { -- Right widgets
-                layout = wibox.layout.fixed.horizontal,
-                mykeyboardlayout,
-                wibox.widget.systray(),
-                mytextclock,
-                s.mylayoutbox,
-            },
-        }
-    }
+    --s.mywibox = awful.wibar {
+      --  position = "top",
+        --screen   = s,
+        --widget   = {
+          --  layout = wibox.layout.align.horizontal,
+            --{ -- Left widgets
+              --  layout = wibox.layout.fixed.horizontal,
+                --mylauncher,
+                --s.mytaglist,
+                --s.mypromptbox,
+           -- },
+            --s.mytasklist, -- Middle widget
+            --{ -- Right widgets
+              --  layout = wibox.layout.fixed.horizontal,
+               -- mykeyboardlayout,
+               -- wibox.widget.systray(),
+                -- mytextclock,
+                --s.mylayoutbox,
+           -- },
+       -- }
+    --}
 end)
 
 -- }}}
@@ -405,7 +408,7 @@ client.connect_signal("request::default_keybindings", function()
                 c:raise()
             end,
             {description = "toggle fullscreen", group = "client"}),
-        awful.key({ modkey, "Shift"   }, "c",      function (c) c:kill()                         end,
+        awful.key({ modkey,    }, "q",      function (c) c:kill()                         end,
                 {description = "close", group = "client"}),
         awful.key({ modkey, "Control" }, "space",  awful.client.floating.toggle                     ,
                 {description = "toggle floating", group = "client"}),
@@ -484,11 +487,11 @@ ruled.client.connect_signal("request::rules", function()
     }
 
     -- Add titlebars to normal clients and dialogs
-    ruled.client.append_rule {
-        id         = "titlebars",
-        rule_any   = { type = { "normal", "dialog" } },
-        properties = { titlebars_enabled = true      }
-    }
+    -- ruled.client.append_rule {
+      --  id         = "titlebars",
+        -- rule_any   = { type = { "normal", "dialog" } },
+        -- properties = { titlebars_enabled = true      }
+    -- }
 
     -- Set Firefox to always map on the tag named "2" on screen 1.
     -- ruled.client.append_rule {
@@ -537,7 +540,8 @@ client.connect_signal("request::titlebars", function(c)
     }
 end)
 -- }}}
-
+client.connect_signal("focus", function(c) c.border_color = "#000000" end)
+client.connect_signal("unfocus", function(c) c.border_color = "#000000" end)
 -- {{{ Notifications
 
 ruled.notification.connect_signal('request::rules', function()
