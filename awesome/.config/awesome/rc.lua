@@ -40,6 +40,8 @@ beautiful.font = "Roboto Mono Nerd Fonts 10"
 beautiful.useless_gap = 4
 awful.spawn.with_shell("xrandr -s 1360x768")
 awful.spawn.with_shell("~/.config/polybar/launch.sh")
+awful.spawn.with_shell("picom -b")
+
 -- This is used later as the default terminal and editor to run.
 terminal = "alacritty"
 editor = os.getenv("EDITOR") or "vim"
@@ -565,3 +567,12 @@ end)
 client.connect_signal("mouse::enter", function(c)
     c:activate { context = "mouse_enter", raise = false }
 end)
+
+
+
+client.connect_signal("manage", function(c)
+	c.shape = function(cr, w, h)
+		gears.shape.rounded_rect(cr, w, h, 5)
+	end
+end)
+
