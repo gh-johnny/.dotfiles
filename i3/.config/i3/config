@@ -55,7 +55,7 @@ bindsym $mod+Return exec alacritty
 # on start exec these 
 exec xrandr -s 1360x768 
 exec picom -b
-exec nitrogen firewatchBgTwo.jpg
+exec nitrogen --set-scaled ~/.config/.wallpapers/firewatchPurple.jpg
 exec ~/.config/polybar/launch.sh
 
 # kill focused window
