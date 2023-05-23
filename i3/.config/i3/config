@@ -204,3 +204,5 @@ bindsym $mod+r mode "resize"
 default_border pixel 0
 gaps inner 4px
 #gaps outer 0px
+#smart_borders on
+#hide_edge_borders smart
