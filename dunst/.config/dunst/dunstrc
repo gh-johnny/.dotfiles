@@ -61,7 +61,7 @@
     progress_bar_max_width = 300
 
     # Corner radius for the progress bar. 0 disables rounded corners.
-    progress_bar_corner_radius = 0
+    progress_bar_corner_radius = 3
 
     # Corner radius for the icon image.
     icon_corner_radius = 0
@@ -82,17 +82,17 @@
     separator_height = 2
 
     # Padding between text and separator.
-    padding = 8
+    padding = 12
 
     # Horizontal padding.
     horizontal_padding = 8
 
     # Padding between text and icon.
-    text_icon_padding = 0
+    text_icon_padding = 12
 
     # Defines width in pixels of frame around the notification window.
     # Set to 0 to disable.
-    frame_width = 1
+    frame_width = 2
 
     # Defines color of the frame around the notification window.
     frame_color = "#8bd5ca"
@@ -123,7 +123,7 @@
 
     ### Text ###
 
-    font = Roboto Mono Nerd Font 8
+    font = Roboto Mono Nerd Font 9
 
     # The spacing between lines.  If the height is smaller than the
     # font height, it will get raised to the font height.
@@ -332,7 +332,7 @@
     background = "#24273a"
     foreground = "#cad3f5"
     frame_color = "#ed8796"
-    timeout = 10
+    timeout = 0
     # Icon for notifications with critical urgency, uncomment to enable
     #default_icon = /path/to/icon
 
