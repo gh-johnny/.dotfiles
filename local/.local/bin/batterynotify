@@ -13,7 +13,7 @@ BATTERY_CHARGED_ICON=$ICONS_PATH/battery-charged.png
 BATTERY_ALERT_ICON=$ICONS_PATH/battery-alert.png
 
 # Battery percentage at which to notify
-WARNING_LEVEL=23
+WARNING_LEVEL=25
 BATTERY_DISCHARGING=$(acpi -b | grep "Battery 0" | grep -c "Discharging")
 BATTERY_LEVEL=$(acpi -b | grep "Battery 0" | grep -P -o '[0-9]+(?=%)')
 
