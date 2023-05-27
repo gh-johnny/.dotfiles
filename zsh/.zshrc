@@ -14,6 +14,11 @@ source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
 
 PS1='%n@%m:%${(#):-%~}%# '
 
+
+
+# Environmental variables
+export EDITOR="vim"
+
 # Aliases
 alias src="source ~/.zshrc"
 alias ls="ls -m --color=auto"
