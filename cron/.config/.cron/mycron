@@ -3,5 +3,5 @@
 
 */5 * * * * /home/johnny/.local/bin/batterynotify > /dev/null 2> /home/johnny/.logs/cron_logs/cron_error_output_batterynotify.log 
 
-
+*/5 * * * * /home/johnny/.local/bin/batteryhibernate 
 

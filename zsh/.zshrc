@@ -26,6 +26,7 @@ alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
 alias .....="cd ../../../.."
+alias blh=""~/.local/bin/bluetoothheadphones
 
 # ex - arquive extractor
 # ex <file>
