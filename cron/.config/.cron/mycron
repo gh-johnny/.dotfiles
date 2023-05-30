@@ -1,2 +1,7 @@
-*/5 * * * * /home/johnny/.local/bin/batterynotify
+# Make sure to install cronie 
+# Make sure to enable the cron service on systemd or whatever your system runs 
+
+*/5 * * * * /home/johnny/.local/bin/batterynotify > /dev/null 2> /home/johnny/.logs/cron_logs/cron_error_output_batterynotify.log 
+
+
 
