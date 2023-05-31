@@ -19,7 +19,7 @@ font:
 window: 
   padding:
     x: 10
-    y: 5 
+    y: 5
   class: Alacritty
   general: Alacritty
   opacity: 0.8
