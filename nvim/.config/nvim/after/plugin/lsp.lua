@@ -3,7 +3,8 @@ local lsp = require("lsp-zero")
 lsp.preset("recommended")
 
 lsp.ensure_installed({
-    --'eslint'
+    'lua_ls',
+    'eslint',
 })
 
 local cmp = require("cmp")
