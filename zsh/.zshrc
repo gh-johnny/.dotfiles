@@ -16,12 +16,14 @@ PS1='%n@%m:%${(#):-%~}%# '
 
 
 
-# Environmental variables
+# Environmental variables (env)
 export EDITOR="vim"
 
 # Aliases
 alias src="source ~/.zshrc"
+alias kill="kill -9"
 alias ls="ls -m --color=auto"
+alias grep="grep --color=always"
 alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
