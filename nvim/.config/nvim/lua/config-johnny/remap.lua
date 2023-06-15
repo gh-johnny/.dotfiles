@@ -23,4 +23,3 @@ vim.keymap.set("v", "<Esc>", "<Esc><Cmd>w<CR>")
 vim.keymap.set("i", "<Esc>", "<Esc><Cmd>w<CR>")
 vim.keymap.set("n", "<Control>z", "<Cmd>w<CR><Control>z")
 vim.keymap.set("v", "<Control>z", "<Cmd>w<CR><Control>z")
-
