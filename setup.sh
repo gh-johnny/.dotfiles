@@ -2,7 +2,7 @@
 
 # Double checking 
 while( true ) do
-    read -p "Running this program will make noticible changes in your machine. It is advised to check the file before running it and encounter any problem. Are you sure you would like to continue? [YES/NO]" ANSWER 
+    read -p "Running this program will make noticible changes in your machine. It is advised to check the file's content before running it and encounter any problem. Are you sure you would like to continue? [YES/NO]" ANSWER 
     if [ $ANSWER -eq "YES" ]; then
         break
     elif [ $ANSWER -eq "NO" ]; then

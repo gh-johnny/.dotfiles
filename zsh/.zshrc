@@ -14,6 +14,9 @@ source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
 
 PS1='%n@%m:%${(#):-%~}%# '
 
+# Set to vi mode in cli
+set -o vi
+
 
 
 # Environmental variables (env)
@@ -21,6 +24,7 @@ export EDITOR="vim"
 
 # Aliases
 alias src="source ~/.zshrc"
+alias nv="nvim"
 alias kill="kill -9"
 alias ls="ls -m --color=auto"
 alias grep="grep --color=always"
