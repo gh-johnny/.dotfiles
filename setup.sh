@@ -1,4 +1,18 @@
-
+###                                                                 ###
+#####################################################################
+#####################################################################
+#                                                                   #
+#                                                                   #
+#           Read this file carefuly and make desired changes        #
+#           Thank you                                               #
+#           --   gh-johnny                                          #
+#                                                                   #
+#                                                                   #
+#                                                                   #
+#####################################################################
+#####################################################################
+###                                                                 ###
+                                                                   
 
 while( true ) do
     read -p "Running this program will make noticible changes in your machine. It is advised to check the file's content before running it and encounter any problem. Are you sure you would like to continue? [yes/no]" ANSWER 
@@ -13,24 +27,34 @@ while( true ) do
 done
 
 
-
+cd
 
 
 
 # Sync pacman && Install bins
-#sudo pacman -Syyy
+sudo pacman -Syyy
 
-# vim, i3, neovim, zsh, p10k, rofi, polybar, picom, dunst, cronie
-#sudo pacman -S
-
-# ly
-#yay
-
-
-#git clone
+# Installing aur helper (yay) 
+# git clone https://aur.archlinux.org/yay-git.git
+# cd yay-git/
+# makepkg -si 
+# cd
+# rm -rf yay-git
 
 
+yay -S --noconfirm zsh-theme-powerlevel10k-git
+echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
 
+
+sudo pacman -S xorg i3 alacritty vim neovim zsh rofi polybar dunst cronie xrandr acpi papirus-icon-theme firefox nitrogen pamixer
+
+
+yay -S picom-git brillo
+
+
+sudo pacman -S ly
+systemctl enable ly.service
+systemctl disable getty@tty2.service
 
 
 # Make custom log dir ( still in development )
@@ -42,8 +66,11 @@ done
 
 
 # Stow (automatically place all links into their belonging path)
-# stow $PWD/.dotfiles/*
+# stow ~/.dotfiles/*
 
 
 # Get rid of setup.sh file (this file)
 # rm ~/.dotfiles/setup.sh
+
+
+reboot
