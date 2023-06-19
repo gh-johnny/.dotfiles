@@ -27,12 +27,12 @@ while( true ) do
 done
 
 
-cd
+cd &&
 
 
 
 # Sync pacman && Install bins
-sudo pacman -Syyy
+sudo pacman -Syyy &&
 
 # Installing aur helper (yay) 
 # git clone https://aur.archlinux.org/yay-git.git
@@ -42,37 +42,55 @@ sudo pacman -Syyy
 # rm -rf yay-git
 
 
-yay -S --noconfirm zsh-theme-powerlevel10k-git
-echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
+yay -S --noconfirm zsh-theme-powerlevel10k-git &&
+echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >> ~/.zshrc &&
 
 
-sudo pacman -S xorg i3 alacritty vim neovim zsh rofi polybar dunst cronie xrandr acpi papirus-icon-theme firefox nitrogen pamixer stow
+sudo pacman -S xorg &&
+sudo pacman -S i3 &&
+sudo pacman -S alacritty &&
+sudo pacman -S vim &&
+sudo pacman -S neovim && 
+sudo pacman -S zsh &&
+sudo pacman -S rofi &&
+sudo pacman -S polybar &&
+sudo pacman -S dunst &&
+sudo pacman -S cronie &&
+sudo pacman -S xrandr &&
+sudo pacman -S acpi &&
+sudo pacman -S papirus-icon-theme &&
+sudo pacman -S firefox &&
+sudo pacman -S nitrogen &&
+sudo pacman -S pamixer &&
+sudo pacman -S stow &&
+
+
 
 
 # yay -S picom-git brillo
 
 
-sudo pacman -S ly
-systemctl enable ly.service
-systemctl disable getty@tty2.service
+sudo pacman -S ly &&
+systemctl enable ly.service &&
+systemctl disable getty@tty2.service &&
 
 
 # Make custom log dir ( still in development )
-# mkdir -p ~/.logs/polybar_logs && ~/.logs/cron_logs
+# mkdir -p ~/.logs/polybar_logs && ~/.logs/cron_logs &&
 
 
 # Get rid of README.md file (docs)
-# rm ~/.dotfiles/README.md
+# rm ~/.dotfiles/README.md &&
 
 
 # Stow (automatically place all links into their belonging path)
-# cd
-# stow ~/.dotfiles/*
+# cd &&
+# stow ~/.dotfiles/* &&
 
 
 # Get rid of setup.sh file (this file)
-# cd
-# rm ~/.dotfiles/setup.sh
+# cd &&
+# rm ~/.dotfiles/setup.sh &&
 
 
 # reboot
