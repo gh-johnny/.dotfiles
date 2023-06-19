@@ -34,6 +34,9 @@ cd &&
 # Sync pacman && Install bins
 sudo pacman -Syyy &&
 
+# Recommended to install with option 1 ( the rest may install with default options and it should be ok for most systems )
+sudo pacman -S i3 &&
+
 # Installing aur helper (yay) 
  git clone https://aur.archlinux.org/yay-git.git &&
  cd yay-git/ &&
@@ -46,7 +49,6 @@ yay -S --noconfirm zsh-theme-powerlevel10k-git &&
 
 
 sudo pacman -S xorg &&
-sudo pacman -S i3 &&
 sudo pacman -S alacritty &&
 sudo pacman -S vim &&
 sudo pacman -S neovim && 
@@ -91,8 +93,8 @@ rm -rf ly &&
  cd &&
  rm ~/.dotfiles/setup.sh &&
 
-
-# reboot
+# Comment both last '&&' and 'reboot' if you do not wish to already reboot your system
+ reboot
 
 
 
