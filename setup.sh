@@ -35,15 +35,14 @@ cd &&
 sudo pacman -Syyy &&
 
 # Installing aur helper (yay) 
-# git clone https://aur.archlinux.org/yay-git.git
-# cd yay-git/
-# makepkg -si 
-# cd
-# rm -rf yay-git
+# git clone https://aur.archlinux.org/yay-git.git &&
+# cd yay-git/ &&
+# makepkg -si && 
+# cd &&
+# rm -rf yay-git &&
 
 
 yay -S --noconfirm zsh-theme-powerlevel10k-git &&
-echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >> ~/.zshrc &&
 
 
 sudo pacman -S xorg &&
@@ -67,12 +66,13 @@ sudo pacman -S stow &&
 
 
 
-# yay -S picom-git brillo
+yay -S picom-git brillo
 
 
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
+rm -rf ly
 
 
 # Make custom log dir ( still in development )
@@ -93,4 +93,26 @@ systemctl disable getty@tty2.service &&
 # rm ~/.dotfiles/setup.sh &&
 
 
-# reboot
+reboot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
