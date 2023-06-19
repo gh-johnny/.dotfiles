@@ -73,7 +73,6 @@ yay -S brillo &&
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
-rm -rf ly &&
 
 
 # Make custom log dir ( still in development )
@@ -85,11 +84,11 @@ rm -rf ly &&
 
 
 # Stow (automatically place all links into their belonging path)
- cd &&
- stow ~/.dotfiles/* &&
+ cd .dotfiles &&
+ stow */ &&
 
 
-# Get rid of setup.sh file (this file)
+# Get rid of setup.sh file ( this file )
  cd &&
  rm ~/.dotfiles/setup.sh &&
 
