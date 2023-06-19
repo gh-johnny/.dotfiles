@@ -54,6 +54,7 @@ sudo pacman -S zsh &&
 sudo pacman -S rofi &&
 sudo pacman -S polybar &&
 sudo pacman -S dunst &&
+sudo pacman -S libnotify &&
 sudo pacman -S cronie &&
 sudo pacman -S acpi &&
 sudo pacman -S papirus-icon-theme &&
@@ -63,9 +64,8 @@ sudo pacman -S pamixer &&
 sudo pacman -S stow &&
 
 
-
-
-yay -S picom-git brillo &&
+yay -S picom-git &&
+yay -S brillo &&
 
 
 sudo pacman -S ly &&
@@ -75,7 +75,7 @@ rm -rf ly &&
 
 
 # Make custom log dir ( still in development )
- mkdir -p ~/.logs/polybar_logs && ~/.logs/cron_logs &&
+ mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
 
 
 # Get rid of README.md file (docs)
@@ -92,7 +92,7 @@ rm -rf ly &&
  rm ~/.dotfiles/setup.sh &&
 
 
- reboot
+# reboot
 
 
 
