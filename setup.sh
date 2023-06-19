@@ -35,11 +35,11 @@ cd &&
 sudo pacman -Syyy &&
 
 # Installing aur helper (yay) 
-# git clone https://aur.archlinux.org/yay-git.git &&
-# cd yay-git/ &&
-# makepkg -si && 
-# cd &&
-# rm -rf yay-git &&
+ git clone https://aur.archlinux.org/yay-git.git &&
+ cd yay-git/ &&
+ makepkg -si && 
+ cd &&
+ rm -rf yay-git &&
 
 
 yay -S --noconfirm zsh-theme-powerlevel10k-git &&
@@ -66,34 +66,34 @@ sudo pacman -S stow &&
 
 
 
-yay -S picom-git brillo
+yay -S picom-git brillo &&
 
 
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
-rm -rf ly
+rm -rf ly &&
 
 
 # Make custom log dir ( still in development )
-# mkdir -p ~/.logs/polybar_logs && ~/.logs/cron_logs &&
+ mkdir -p ~/.logs/polybar_logs && ~/.logs/cron_logs &&
 
 
 # Get rid of README.md file (docs)
-# rm ~/.dotfiles/README.md &&
+ rm ~/.dotfiles/README.md &&
 
 
 # Stow (automatically place all links into their belonging path)
-# cd &&
-# stow ~/.dotfiles/* &&
+ cd &&
+ stow ~/.dotfiles/* &&
 
 
 # Get rid of setup.sh file (this file)
-# cd &&
-# rm ~/.dotfiles/setup.sh &&
+ cd &&
+ rm ~/.dotfiles/setup.sh &&
 
 
-reboot
+ reboot
 
 
 
