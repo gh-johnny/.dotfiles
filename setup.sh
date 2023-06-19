@@ -46,10 +46,10 @@ yay -S --noconfirm zsh-theme-powerlevel10k-git
 echo 'source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme' >>~/.zshrc
 
 
-sudo pacman -S xorg i3 alacritty vim neovim zsh rofi polybar dunst cronie xrandr acpi papirus-icon-theme firefox nitrogen pamixer
+sudo pacman -S xorg i3 alacritty vim neovim zsh rofi polybar dunst cronie xrandr acpi papirus-icon-theme firefox nitrogen pamixer stow
 
 
-yay -S picom-git brillo
+# yay -S picom-git brillo
 
 
 sudo pacman -S ly
@@ -58,7 +58,7 @@ systemctl disable getty@tty2.service
 
 
 # Make custom log dir ( still in development )
-# mkdir - p ~/.logs/polybar_logs && ~/.logs/cron_logs
+# mkdir -p ~/.logs/polybar_logs && ~/.logs/cron_logs
 
 
 # Get rid of README.md file (docs)
@@ -66,11 +66,13 @@ systemctl disable getty@tty2.service
 
 
 # Stow (automatically place all links into their belonging path)
+# cd
 # stow ~/.dotfiles/*
 
 
 # Get rid of setup.sh file (this file)
+# cd
 # rm ~/.dotfiles/setup.sh
 
 
-reboot
+# reboot
