@@ -55,7 +55,6 @@ sudo pacman -S rofi &&
 sudo pacman -S polybar &&
 sudo pacman -S dunst &&
 sudo pacman -S cronie &&
-sudo pacman -S xrandr &&
 sudo pacman -S acpi &&
 sudo pacman -S papirus-icon-theme &&
 sudo pacman -S firefox &&
