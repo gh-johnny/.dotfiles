@@ -1,29 +1,34 @@
-###                                                                 ###
-#####################################################################
-#####################################################################
-#                                                                   #
-#                                                                   #
-#           Read this file carefuly and make desired changes        #
-#           Thank you                                               #
-#           --   gh-johnny                                          #
-#                                                                   #
-#                                                                   #
-#                                                                   #
-#####################################################################
-#####################################################################
-###                                                                 ###
+ ###                                                                 ###
+ #####################################################################
+ #####################################################################
+ #                                                                   #
+ #                                                                   #
+ #            Read this file carefuly and make desired changes       #
+ #            Thank you                                              #
+ #             --   gh-johnny                                        #
+ #                                                                   #
+ #                                                                   #
+ #                                                                   #
+ #####################################################################
+ #####################################################################
+ ###                                                                 ###
                                                                    
 
 while( true ) do
-    read -p "Running this program will make noticible changes in your machine. It is advised to check the file's content before running it and encounter any problem. Are you sure you would like to continue? [yes/no]" ANSWER 
-    if [ $ANSWER == "yes" ]; then
-        break
-    elif [ $ANSWER == "no" ]; then
-        echo "You cancelled this operation..."
-        exit 1
-    else
-        continue
-    fi
+    read -rp "Running this program will make noticible changes in your machine. It is advised to check the file's content before running it and encounter any problem. Are you sure you would like to continue? [Y/n]" ANSWER 
+    case "$ANSWER" in
+        [Yy]|"")
+            echo "Confirmed, proceeding."
+            break
+        ;;
+        [Nn])
+            echo "Aborting"
+            exit 1 
+        ;;
+        *)
+            echo "Invalid option"
+        ;;
+    esac
 done
 
 
@@ -34,68 +39,98 @@ cd &&
 # Sync pacman && Install bins
 sudo pacman -Syyy &&
 
+# Tilling window/desktop manager
 # Recommended to install with option 1 ( the rest may install with default options and it should be ok for most systems )
 sudo pacman -S i3 &&
 
-# Installing aur helper (yay) 
- git clone https://aur.archlinux.org/yay-git.git &&
- cd yay-git/ &&
- makepkg -si && 
- cd &&
- rm -rf yay-git &&
+# Installing aur helper ( yay ) 
+git clone https://aur.archlinux.org/yay-git.git &&
+cd yay-git/ &&
+makepkg -si && 
+cd &&
+rm -rf yay-git &&
 
 
+# Shell ( zsh )
+# And setting it as default shell
+sudo pacman -S zsh &&
+sudo echo /sbin/zsh >> /etc/shells &&
+chsh -s $(which zsh) &&
+
+# Zsh theme ( Install only check --> https://github.com/romtav/powerlevel10k#manual )
 yay -S --noconfirm zsh-theme-powerlevel10k-git &&
 
-
+# Server for hardware --> graphical environment
 sudo pacman -S xorg &&
+
+# Terminal
 sudo pacman -S alacritty &&
+
+# Text editors
 sudo pacman -S vim &&
 sudo pacman -S neovim && 
-sudo pacman -S zsh &&
+
+# App launcher and more
 sudo pacman -S rofi &&
+
+# Status bar for desktop
 sudo pacman -S polybar &&
+
+# Notification bins
 sudo pacman -S dunst &&
 sudo pacman -S libnotify &&
+
+# To better use cron jobs
 sudo pacman -S cronie &&
+
+# Battery info getter
 sudo pacman -S acpi &&
+
+# Icon theme for apps in graphical env
 sudo pacman -S papirus-icon-theme &&
+
+# Browser
 sudo pacman -S firefox &&
+
+# Wallpaper manager
 sudo pacman -S nitrogen &&
+
+# Audio manager 
 sudo pacman -S pamixer &&
+
+# .dotfiles manager
 sudo pacman -S stow &&
 
-
-yay -S picom-git &&
+# Screen brightness manager
 yay -S brillo &&
 
+# Compositor 
+yay -S picom-git &&
 
+
+# Display manager 
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
 
 
 # Make custom log dir ( still in development )
- mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
+# mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
 
 
-# Get rid of README.md file (docs)
- rm ~/.dotfiles/README.md &&
+# Get rid of README.md file 
+rm ~/.dotfiles/README.md &&
 
 
-# Stow (automatically place all links into their belonging path)
- cd .dotfiles &&
- stow */ &&
+# Stow ( automatically place all links into their belonging path )
+stow ~/.dotfiles/*/ &&
 
 
 # Get rid of setup.sh file ( this file )
- cd &&
- rm ~/.dotfiles/setup.sh &&
+rm ~/.dotfiles/setup.sh 
 
-# Comment both last '&&' and 'reboot' if you do not wish to already reboot your system
- reboot
-
-
+# Uncomment if reboot after imediate installation is not desired
+# && reboot
 
 
 
