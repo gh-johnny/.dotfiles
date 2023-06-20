@@ -54,8 +54,7 @@ rm -rf yay-git &&
 # Shell ( zsh )
 # And setting it as default shell
 sudo pacman -S zsh &&
-su && echo /sbin/zsh >> /etc/shells && exit &&
-chsh -s $(which zsh) &&
+# chsh -s $(which zsh) &&
 
 # Zsh theme ( Install only check --> https://github.com/romtav/powerlevel10k#manual )
 yay -S --noconfirm zsh-theme-powerlevel10k-git &&
