@@ -14,13 +14,44 @@ source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
 
 PS1='%n@%m:%${(#):-%~}%# '
 
-# Set to vi mode in cli
-set -o vi
+# ex - arquive extractor
+# ex <file>
+ex()
+{
+    if [ -f $1 ] ; then
+        case $1 in
+            *.tar.bz2)    tar xvjf $1    ;;
+            *.tar.gz)    tar xvzf $1    ;;
+            *.tar.xz)    tar xf $1      ;;
+            *.bz2)        bunzip2 $1     ;;
+            *.rar)        unrar x $1     ;;
+            *.gz)        gunzip $1      ;;
+            *.tar)        tar xvf $1     ;;
+            *.tbz2)        tar xvjf $1    ;;
+            *.tgz)        tar xvzf $1    ;;
+            *.zip)        unzip $1       ;;
+            *.Z)        uncompress $1  ;;
+            *.7z)        7z x $1        ;;
+            *)        echo "don't know how to extract, sorry brotha '$1'..." ;;
+        esac
+    else
+        echo "'$1' is not a valid file! Fool!"
+    fi
+}
 
 
+# Environmental variables
+export EDITOR="nvim"
+export TERMINAL="alacritty"
+export BROWSER="firefox"
+export CRON=~/.dotfiles/cron/.config/.cron/mycron
+export LESSHISTFILE=
+# export LOGS="~./dotfiles/logs"
+export XDG_PICTURES_DIR="~/Media/Pictures/"
+export XDG_VIDEOS_DIR="~/Media/Videos/"
+export XDG_MUSIC_DIR="~/Media/Music/"
+export MOZILLA_HOME=~/.config/.mozilla
 
-# Environmental variables (env)
-export EDITOR="vim"
 
 # Aliases
 alias src="source ~/.zshrc"
@@ -34,28 +65,7 @@ alias ....="cd ../../.."
 alias .....="cd ../../../.."
 alias blh=""~/.local/bin/bluetoothheadphones
 
-# ex - arquive extractor
-# ex <file>
-ex()
-{
-	if [ -f $1 ] ; then
-		case $1 in
-			*.tar.bz2)    tar xvjf $1    ;;
-			*.tar.gz)    tar xvzf $1    ;;
-			*.tar.xz)    tar xf $1      ;;
-			*.bz2)        bunzip2 $1     ;;
-			*.rar)        unrar x $1     ;;
-			*.gz)        gunzip $1      ;;
-			*.tar)        tar xvf $1     ;;
-			*.tbz2)        tar xvjf $1    ;;
-			*.tgz)        tar xvzf $1    ;;
-			*.zip)        unzip $1       ;;
-			*.Z)        uncompress $1  ;;
-			*.7z)        7z x $1        ;;
-			*)        echo "don't know how to extract, sorry brotha '$1'..." ;;
-		esac
-	else
-		echo "'$1' is not a valid file! Fool!"
-	fi
-}
+
+# Set to vi mode in cli
+set -o vi
 
