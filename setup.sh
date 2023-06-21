@@ -135,7 +135,7 @@ less ~/.dotfiles/setup.sh &
 rm ~/.lesshst &&
 
 # Get rid of setup.sh file ( this file )
-rm ~/.dotfiles/setup.sh &&
+rm ~/.dotfiles/setup.sh 
 
 # To already apply changes
 && exit && reboot
