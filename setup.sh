@@ -31,10 +31,19 @@ while( true ) do
     esac
 done
 
+# Reboot to apply changes
+
 cd &&
 
-# Sync pacman && Install bins
+# Sync pacman 
 sudo pacman -Syyy &&
+
+# .dotfiles manager
+sudo pacman -S stow &&
+
+# Stow ( automatically place all lns into their belonging path )
+cd ~/.dotfiles &&
+stow */ &&
 
 # Tilling window/desktop manager
 # Recommended to install with option 1 ( the rest may install with default options and it should be ok for most systems )
@@ -75,7 +84,7 @@ sudo pacman -S polybar &&
 sudo pacman -S dunst &&
 sudo pacman -S libnotify &&
 
-# To better use cron jobs ( source the file later on with $: crontab mycron )
+# To better use cron jobs ( source the file later on with: crontab mycron )
 sudo pacman -S cronie &&
 
 # Battery info getter
@@ -92,9 +101,6 @@ sudo pacman -S nitrogen &&
 
 # Audio manager 
 sudo pacman -S pamixer &&
-
-# .dotfiles manager
-sudo pacman -S stow &&
 
 # Screen brightness manager
 yay -S brillo &&
@@ -113,10 +119,6 @@ systemctl disable getty@tty2.service &&
 # Get rid of README.md file 
 rm ~/.dotfiles/README.md &&
 
-# Stow ( automatically place all links into their belonging path )
-cd ~/.dotfiles &&
-stow */ &&
-
 # Make Xauthority file
 cd ~ &&
 touch .Xauthority &&
@@ -131,10 +133,6 @@ mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ &&
 
 # Get rid of setup.sh file ( this file )
 rm ~/.dotfiles/setup.sh 
-
-# Reboot to already apply changes
-
-
 
 
 
