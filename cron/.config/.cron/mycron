@@ -1,5 +1,13 @@
+# ================================================== Read carefully =======================================================
 # Make sure to install cronie 
 # Make sure to enable the cron service on systemd or whatever your system runs 
+# To see usage run: crontab
+# To list all active cron jobs run: crontab -l
+# To edit cron jobs run: crontab -e
+# Also make sure to run if this is where you whish to have your cron jobs: crontab mycron
+# Everytime you change this file without running crontab -e you need to save changes by running: crontab mycron
+# If crontab -e is edited, this file will remain the same, so to keep the file up to date is essential to run: crontab -l > mycron
+# And do not forget to make necessary changes like changing paths and editing users
 
 */5 * * * * /home/johnny/.local/bin/batterynotify > /dev/null 2> /home/johnny/.logs/cron_logs/cron_error_output_batterynotify.log 
 
