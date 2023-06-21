@@ -75,11 +75,8 @@ sudo pacman -S polybar &&
 sudo pacman -S dunst &&
 sudo pacman -S libnotify &&
 
-# To better use cron jobs
-# To activate cron jobs on mycron file
-# ================================== OI there is a systemctl thing to enable cron stuff prob will have to put in here ...
+# To better use cron jobs ( source the file later on with $: crontab mycron )
 sudo pacman -S cronie &&
-crontab $CRON &&
 
 # Battery info getter
 sudo pacman -S acpi &&
