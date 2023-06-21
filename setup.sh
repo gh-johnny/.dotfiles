@@ -1,3 +1,4 @@
+
  ###                                                                 ###
  #####################################################################
  #####################################################################
@@ -13,7 +14,6 @@
  #####################################################################
  ###                                                                 ###
                                                                    
-
 while( true ) do
     read -rp "Running this program will make noticible changes in your machine. It is advised to check the file's content before running it and encounter any problem. Are you sure you would like to continue? [Y/n]" ANSWER 
     case "$ANSWER" in
@@ -31,10 +31,7 @@ while( true ) do
     esac
 done
 
-
 cd &&
-
-
 
 # Sync pacman && Install bins
 sudo pacman -Syyy &&
@@ -50,11 +47,10 @@ makepkg -si &&
 cd &&
 rm -rf yay-git &&
 
-
 # Shell ( zsh )
 # And setting it as default shell
 sudo pacman -S zsh &&
-# chsh -s $(which zsh) &&
+chsh -s /usr/bin/zsh &&
 
 # Zsh theme ( Install only check --> https://github.com/romtav/powerlevel10k#manual )
 yay -S --noconfirm zsh-theme-powerlevel10k-git &&
@@ -69,7 +65,7 @@ sudo pacman -S alacritty &&
 sudo pacman -S vim &&
 sudo pacman -S neovim && 
 
-# App launcher and more
+#l App launcher and more
 sudo pacman -S rofi &&
 
 # Status bar for desktop
@@ -80,7 +76,10 @@ sudo pacman -S dunst &&
 sudo pacman -S libnotify &&
 
 # To better use cron jobs
+# To activate cron jobs on mycron file
+# ================================== OI there is a systemctl thing to enable cron stuff prob will have to put in here ...
 sudo pacman -S cronie &&
+crontab $CRON &&
 
 # Battery info getter
 sudo pacman -S acpi &&
@@ -106,42 +105,40 @@ yay -S brillo &&
 # Compositor 
 yay -S picom-git &&
 
-
 # Display manager 
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
 
-
 # Make custom log dir ( still in development )
 # mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
-
 
 # Get rid of README.md file 
 rm ~/.dotfiles/README.md &&
 
-
 # Stow ( automatically place all links into their belonging path )
-stow ~/.dotfiles/*/ &&
+cd ~/.dotfiles &&
+stow */ &&
 
+# Make Xauthority file
+cd ~ &&
+touch .Xauthority &&
+
+# Home dir cleanup
+rm ~/.bashrc &&
+rm ~/.bash_profile &&
+rm ~/.bash_history &&
+rm ~/.bash_logout &&
+rm -rf ~/Documents &&
+mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ &&
+less ~/.dotfiles/setup.sh &
+rm ~/.lesshst &&
 
 # Get rid of setup.sh file ( this file )
-rm ~/.dotfiles/setup.sh 
+rm ~/.dotfiles/setup.sh &&
 
-# Uncomment if reboot after imediate installation is not desired
-# && reboot
-
-
-
-
-
-
-
-
-
-
-
-
+# To already apply changes
+&& exit && reboot
 
 
 
