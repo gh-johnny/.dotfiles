@@ -135,8 +135,8 @@ mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ &&
 # Get rid of setup.sh file ( this file )
 rm ~/.dotfiles/setup.sh 
 
-# To already apply changes
-&& reboot
+# Reboot to already apply changes
+
 
 
 
