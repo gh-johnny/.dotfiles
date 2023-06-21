@@ -131,8 +131,6 @@ rm ~/.bash_history &&
 rm ~/.bash_logout &&
 rm -rf ~/Documents &&
 mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ &&
-less ~/.dotfiles/setup.sh &
-rm ~/.lesshst &&
 
 # Get rid of setup.sh file ( this file )
 rm ~/.dotfiles/setup.sh 
