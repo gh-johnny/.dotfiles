@@ -138,7 +138,7 @@ rm ~/.lesshst &&
 rm ~/.dotfiles/setup.sh 
 
 # To already apply changes
-&& exit && reboot
+&& reboot
 
 
 
