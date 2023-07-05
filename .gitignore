@@ -1,5 +1,7 @@
-local/.local/share/xorg/
+local/.local/share
 
 local/.local/share/recently-used.xbel
 
-local/.local/share/nvim/
+local/.local/bin/bluetoothheadphones
+
+nvim/.config/nvim/lazy-lock.json

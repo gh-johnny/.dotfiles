@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Use your device mac address
-DEVICE="XX:XX:00:00:AA:BB"
+DEVICE="D8:AA:59:66:16:3D"
 
 if bluetoothctl info $DEVICE | grep 'Connected: yes' -q; then
 	bluetoothctl disconnect "$DEVICE"
 else
-	bluetoothctl connect "$device"
+	bluetoothctl connect "$DEVICE"
 fi
 exit 0
