@@ -1,0 +1,17 @@
+#
+#
+#   independent hotkeys from wm
+#
+#
+
+# Printscreen
+@Print
+        flameshot gui
+
+
+# Brightness
+XF86MonBrightnessUp
+        brightness up
+
+XF86MonBrightnessDown
+        brightness down

@@ -90,6 +90,9 @@ sudo pacman -S cronie &&
 # Battery info getter
 sudo pacman -S acpi &&
 
+# Hotkeys manager ( independent from wm )
+sudo pacman -S sxhkd &&
+
 # Icon theme for apps in graphical env
 sudo pacman -S papirus-icon-theme &&
 
@@ -101,6 +104,12 @@ sudo pacman -S nitrogen &&
 
 # Audio manager 
 sudo pacman -S pamixer &&
+
+# Screenshot software
+sudo pacman -S flameshot &&
+
+# Music player
+sudo pacman -S spotify &&
 
 # Screen brightness manager
 yay -S brillo &&
@@ -117,23 +126,22 @@ systemctl disable getty@tty2.service &&
 # mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
 
 # Get rid of README.md file 
-rm ~/.dotfiles/README.md &&
+# rm ~/.dotfiles/README.md &&
 
 # Make Xauthority file
 cd ~ &&
 touch .Xauthority &&
 
 # Home dir cleanup
-rm ~/.bashrc &&
-rm ~/.bash_profile &&
-rm ~/.bash_history &&
-rm ~/.bash_logout &&
+# rm ~/.bashrc &&
+# rm ~/.bash_profile &&
+# rm ~/.bash_history &&
+# rm ~/.bash_logout &&
 rm -rf ~/Documents &&
-mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ &&
+mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ 
 
 # Get rid of setup.sh file ( this file )
-rm ~/.dotfiles/setup.sh 
-
+# rm ~/.dotfiles/setup.sh 
 
 
 
