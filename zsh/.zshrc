@@ -59,11 +59,13 @@ alias nv="nvim"
 alias kill="kill -9"
 alias ls="ls -m --color=auto"
 alias grep="grep --color=always"
+alias brightness=~/.dotfiles/local/.local/bin/changebrightness
+alias screenshot="flameshot"
 alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
 alias .....="cd ../../../.."
-alias blh=""~/.local/bin/bluetoothheadphones
+alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
 
 
 # Set to vi mode in cli
