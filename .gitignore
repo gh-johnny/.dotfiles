@@ -1,5 +1,7 @@
 local/.local/share
 
+local/.local/state
+
 local/.local/share/recently-used.xbel
 
 local/.local/bin/bluetoothheadphones
