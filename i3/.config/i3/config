@@ -55,9 +55,10 @@ bindsym $mod+Return exec alacritty
 # on start exec these 
 exec_always xrandr -s 1360x768 
 exec_always picom -b
-#exec_always nitrogen --set-scaled ~/.config/.wallpapers/firewatchPurple.jpg
-exec_always nitrogen --random --set-scaled ~/.config/.wallpapers/
+exec_always nitrogen --set-scaled ~/.config/.wallpapers/firewatchOrange.jpg
+#exec_always nitrogen --random --set-scaled ~/.config/.wallpapers/
 exec_always ~/.config/polybar/launch.sh
+exec_always sxhkd &
 
 # kill focused window
 bindsym $mod+q kill

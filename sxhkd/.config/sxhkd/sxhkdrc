@@ -11,7 +11,7 @@
 
 # Brightness
 XF86MonBrightnessUp
-        brightness up
+        ~/.local/bin/changebrightness up
 
 XF86MonBrightnessDown
-        brightness down
+        ~/.local/bin/changebrightness down
