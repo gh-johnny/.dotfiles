@@ -1,10 +1,6 @@
-local/.local/share/
+local/.local/share/*
 
-local/.local/state/nvim/mason.log
-
-local/.local/state/nvim/shada/main.shada
-
-local/.local/share/recently-used.xbel
+local/.local/state/*
 
 local/.local/bin/bluetoothheadphones
 

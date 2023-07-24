@@ -32,7 +32,7 @@ vim.opt.termguicolors = true
 vim.opt.wrap = false
 
 -- Lines after scroll
-vim.opt.scrolloff = 12
+vim.opt.scrolloff = 8
 
 -- Updatetime
 vim.opt.updatetime = 50
