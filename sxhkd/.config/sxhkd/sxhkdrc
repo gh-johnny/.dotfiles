@@ -1,8 +1,21 @@
 #
-#
 #   independent hotkeys from wm
 #
-#
+
+
+# Rofi 
+# app launcher 
+super + o
+     ~/.config/rofi/launchers/app_launcher/launcher.sh
+
+# emoji launcher 
+super + shift + e
+     ~/.config/rofi/launchers/emoji_launcher/launcher.sh
+
+# emoji launcher 
+super + shift + e
+     ~/.config/rofi/launchers/emoji_launcher/launcher.sh
+
 
 # Printscreen
 @Print
