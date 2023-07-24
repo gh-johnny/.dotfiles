@@ -70,4 +70,3 @@ alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
 
 # Set to vi mode in cli
 set -o vi
-
