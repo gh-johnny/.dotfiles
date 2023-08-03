@@ -59,6 +59,7 @@ exec_always nitrogen --set-scaled ~/.config/.wallpapers/firewatchOrange.jpg
 #exec_always nitrogen --random --set-scaled ~/.config/.wallpapers/
 exec_always ~/.config/polybar/launch.sh
 exec_always sxhkd &
+exec --no-startup-id ~/.config/autostart/*
 
 # kill focused window
 bindsym $mod+q kill
@@ -220,3 +221,4 @@ gaps inner 4px
 #gaps outer 0px
 #smart_borders on
 #hide_edge_borders smart
+

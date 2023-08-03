@@ -69,6 +69,6 @@ alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
 alias wifimenu=~/.dotfiles/local/.local/bin/wifimenu
 alias screenadd=~/.dotfiles/local/.local/bin/screenadd
 
-
 # Set to vi mode in cli
 set -o vi
+
