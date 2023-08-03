@@ -70,9 +70,10 @@ sudo pacman -S xorg &&
 # Terminal
 sudo pacman -S alacritty &&
 
-# Text editors
+# Text editors + hide mouse 
 sudo pacman -S vim &&
 sudo pacman -S neovim && 
+sudo pamcan -S unclutter &&
 
 #l App launcher and more
 sudo pacman -S rofi &&
