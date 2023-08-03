@@ -2,6 +2,14 @@ local/.local/share/*
 
 local/.local/state/*
 
+local/.local/share/recently-used.xbel
+
 local/.local/bin/bluetoothheadphones
 
 nvim/.config/nvim/lazy-lock.json
+
+local/.local/state/lesshst
+
+local/.local/state/nvim/mason-registry-update
+
+local/.local/state/nvim/shada/main.shada
