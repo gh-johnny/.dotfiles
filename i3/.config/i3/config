@@ -59,6 +59,7 @@ exec_always nitrogen --set-scaled ~/.config/.wallpapers/firewatchOrange.jpg
 #exec_always nitrogen --random --set-scaled ~/.config/.wallpapers/
 exec_always ~/.config/polybar/launch.sh
 exec_always sxhkd &
+exec --no-startup-id ~/.config/autostart/*
 
 # kill focused window
 bindsym $mod+q kill
@@ -203,7 +204,7 @@ bindsym $mod+r mode "resize"
 #}
 
 #bindsym $mod+o mode "launcher"
-bindsym $mod+o exec ~/.config/rofi/launchers/type-7/launcher.sh
+bindsym $mod+o exec ~/.config/rofi/launchers/app_launcher/launcher.sh
 
 # Start i3bar to display a workspace bar (plus the system information i3status
 # finds out, if available)
@@ -220,3 +221,4 @@ gaps inner 4px
 #gaps outer 0px
 #smart_borders on
 #hide_edge_borders smart
+
