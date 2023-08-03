@@ -1,0 +1,12 @@
+#!/bin/sh
+
+if [ -z "$1" ]; then
+    echo "give an option as where the second screen should be placed"
+    echo "--above, --below, --left-of, --right-of, --same-as"
+else
+    xrandr --output eDP1 $1 HDMI1
+    echo "EDP1 as main + HDM1"
+fi
+
+
+
