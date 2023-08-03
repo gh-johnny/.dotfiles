@@ -68,15 +68,7 @@ alias .....="cd ../../../.."
 alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
 alias wifimenu=~/.dotfiles/local/.local/bin/wifimenu
 alias screenadd=~/.dotfiles/local/.local/bin/screenadd
-# screenAdd() {
-#      if [ -z "$1" ]; then
-#         echo "give an option as where the second screen should be placed"
-#         echo "--above, --below, --left-of, --right-of, --same-as"
-#     else
-#         echo "edp1 as main + hdm1"
-#         xrandr --output edp1 $1 hdmi1
-#     fi
-# }
+
 
 # Set to vi mode in cli
 set -o vi
