@@ -148,6 +148,8 @@ touch .Xauthority &&
 rm -rf ~/Documents &&
 mkdir Media && mv Pictures/ Media/ && mv Videos/ Media/ && mv Music/ Media/ 
 
+chmod +x ~/.local/bin/*
+chmod +x ~/.config/autostart/*
 # Get rid of setup.sh file ( this file )
 # rm ~/.dotfiles/setup.sh 
 
