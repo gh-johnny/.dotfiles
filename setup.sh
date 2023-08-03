@@ -85,7 +85,10 @@ sudo pacman -S dunst &&
 sudo pacman -S libnotify &&
 
 # To better use cron jobs ( source the file later on with: crontab mycron )
+# To activate cron job system
 sudo pacman -S cronie &&
+sudo systemctl enable cronie &&
+sudo systemctl start cronie &&
 
 # Battery info getter
 sudo pacman -S acpi &&
@@ -104,6 +107,9 @@ sudo pacman -S nitrogen &&
 
 # Audio manager 
 sudo pacman -S pamixer &&
+sudo pacman -S alsa-utils &&
+sudo pacman -S pavucontrol &&
+sudo usermod -aG audio $USER &&
 
 # Screenshot software
 sudo pacman -S flameshot &&
@@ -121,6 +127,7 @@ yay -S picom-git &&
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
+
 
 # Make custom log dir ( still in development )
 # mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
