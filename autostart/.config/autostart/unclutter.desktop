@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Unclutter
-Exec=unclutter -idle 0 
+Exec=unclutter -idle 1 
 Type=Application
 X-GNOME-Autostart-enabled=true
 
