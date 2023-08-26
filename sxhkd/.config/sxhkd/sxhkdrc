@@ -28,3 +28,8 @@ XF86MonBrightnessUp
 
 XF86MonBrightnessDown
         ~/.local/bin/changebrightness down
+
+
+# Disable key
+F12
+    

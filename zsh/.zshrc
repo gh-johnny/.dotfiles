@@ -58,6 +58,8 @@ alias src="source ~/.zshrc"
 alias nv="nvim"
 alias kill="kill -9"
 alias ls="ls -m --color=auto"
+alias ll="ls -l"
+alias la="ls -a"
 alias grep="grep --color=always"
 alias brightness=~/.dotfiles/local/.local/bin/changebrightness
 alias screenshot="flameshot"
