@@ -6,15 +6,11 @@
 # Rofi 
 # app launcher 
 super + o
-     ~/.config/rofi/launchers/app_launcher/launcher.sh
+        ~/.config/rofi/launchers/app_launcher/launcher.sh
 
 # emoji launcher 
 super + shift + e
-     ~/.config/rofi/launchers/emoji_launcher/launcher.sh
-
-# emoji launcher 
-super + shift + e
-     ~/.config/rofi/launchers/emoji_launcher/launcher.sh
+        ~/.config/rofi/launchers/emoji_launcher/launcher.sh
 
 
 # Printscreen
@@ -30,6 +26,12 @@ XF86MonBrightnessDown
         ~/.local/bin/changebrightness down
 
 
-# Disable key
+# Toggle keyboard layout (between en-us and pt-br)
+super + i
+        ~/.local/bin/changekeyboardlayout
+
+
+# Disabled keys
+# No airplane mode
 F12
     
