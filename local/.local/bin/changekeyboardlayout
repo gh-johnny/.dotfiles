@@ -1,0 +1,12 @@
+#!/bin/bash
+
+CURRENT_LAYOUT=$(setxkbmap -query | awk -F ':' '/layout/{print $2}'| tr -d '[:space:]')
+
+if [ "$CURRENT_LAYOUT" = "us" ];
+then
+    setxkbmap -layout br
+else 
+    setxkbmap -layout us
+fi
+
+exit 0
