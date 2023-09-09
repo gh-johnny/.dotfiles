@@ -59,7 +59,7 @@ exec_always nitrogen --set-scaled ~/.config/.wallpapers/firewatchOrange.jpg
 #exec_always nitrogen --random --set-scaled ~/.config/.wallpapers/
 exec_always ~/.config/polybar/launch.sh
 exec_always sxhkd &
-exec --no-startup-id ~/.config/autostart/*
+exec_always --no-startup-id ~/.config/autostart/*
 
 # kill focused window
 bindsym $mod+q kill
