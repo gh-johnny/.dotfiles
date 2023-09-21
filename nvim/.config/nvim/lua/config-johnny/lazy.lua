@@ -46,7 +46,7 @@ local plugins = {
         dependencies = {
             -- LSP Support
             { 'neovim/nvim-lspconfig' }, -- Required
-            {                          -- Optional
+            {                            -- Optional
                 'williamboman/mason.nvim',
                 build = function()
                     pcall(vim.cmd, 'MasonUpdate')
@@ -55,9 +55,9 @@ local plugins = {
             { 'williamboman/mason-lspconfig.nvim' }, -- Optional
 
             -- Autocompletion
-            { 'hrsh7th/nvim-cmp' }, -- Required
+            { 'hrsh7th/nvim-cmp' },     -- Required
             { 'hrsh7th/cmp-nvim-lsp' }, -- Required
-            { 'L3MON4D3/LuaSnip' }, -- Required
+            { 'L3MON4D3/LuaSnip' },     -- Required
         }
     },
 
@@ -98,9 +98,20 @@ local plugins = {
         dependencies = { "nvim-tree/nvim-web-devicons" },
     },
 
+    -- CmdLine ( Command line )
     {
         'VonHeikemen/fine-cmdline.nvim',
         dependencies = { "MunifTanjim/nui.nvim" }
+    },
+
+    -- Noice
+    {
+        "folke/noice.nvim",
+        event = "VeryLazy",
+        opts = {},
+        dependencies = {
+            "MunifTanjim/nui.nvim",
+        }
     }
 
 
