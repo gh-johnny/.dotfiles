@@ -61,16 +61,19 @@ alias ls="ls -m --color=auto"
 alias ll="ls -l"
 alias la="ls -a"
 alias grep="grep --color=always"
-alias brightness=~/.dotfiles/local/.local/bin/changebrightness
-alias screenshot="flameshot"
+alias mv="mv -i"
+alias ssh="TERM=xterm-256color $(which ssh)"
 alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
+alias screenshot="flameshot"
 alias .....="cd ../../../.."
+alias brightness=~/.dotfiles/local/.local/bin/changebrightness
 alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
 alias wifimenu=~/.dotfiles/local/.local/bin/wifimenu
 alias screenadd=~/.dotfiles/local/.local/bin/screenadd
 alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
+alias cat="bat"
 
 # Set to vi mode in cli
 set -o vi
