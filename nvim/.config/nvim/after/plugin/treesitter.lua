@@ -9,9 +9,9 @@ require'nvim-treesitter.configs'.setup {
       "c",
       "vim",
       "vimdoc",
-      "lua",  
-      "luadoc",  
-      "luap",  
+      "lua",
+      "luadoc",
+      "luap",
   },
 
   -- Install parsers synchronously (only applied to `ensure_installed`)
