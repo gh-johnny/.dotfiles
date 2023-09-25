@@ -6,7 +6,5 @@ if [ -z "$1" ]; then
 else
     xrandr --output HDMI1 --auto $1 eDP1
     echo "EDP1 as main + HDM1"
+    exit 0
 fi
-
-
-
