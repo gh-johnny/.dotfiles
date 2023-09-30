@@ -1,12 +1,18 @@
 #!/bin/sh
 
-# Check if there is an argument
-if [ -z "$1" ] && { [ "$1" == "--above" ] || [ "$1" == "--below" ] || [ "$1" == "--left-of" ] || [ "$1" == "--right-of" ] || [ "$1" == "--same-as" ]; }
-then
-    xrandr --output HDMI1 --auto $1 eDP1
-    exit 0
-else 
-    echo "This command requires 1 argument"
+# Check if there is exactly one argument
+if [ $# -ne 1 ]; then
+    echo "This command requires exactly 1 argument"
     echo "Available options: --above, --below, --left-of, --right-of, --same-as"
     exit 1
 fi
+
+# Check if the argument matches one of the specified options
+if [ "$1" = "--above" ] || [ "$1" = "--below" ] || [ "$1" = "--left-of" ] || [ "$1" = "--right-of" ] || [ "$1" = "--same-as" ]; then
+    xrandr --output HDMI1 --auto $1 eDP1
+    exit 0
+else 
+    echo "Invalid argument. Available options: --above, --below, --left-of, --right-of, --same-as"
+    exit 1
+fi
+
