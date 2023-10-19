@@ -1,6 +1,8 @@
-
 -- Cursor (fat)
 vim.opt.guicursor = ""
+
+-- Mouse (disabled)
+vim.o.mouse = ""
 
 -- Line nums
 vim.opt.nu = true
@@ -21,14 +23,14 @@ vim.opt.swapfile = false
 vim.opt.undodir = os.getenv("HOME") .. "/.vim/undodir"
 vim.opt.undofile = true
 
--- Search highlight 
+-- Search highlight
 vim.opt.hlsearch = false
 vim.opt.incsearch = true
 
 -- Good colors
 vim.opt.termguicolors = true
 
--- Line wrap 
+-- Line wrap
 vim.opt.wrap = false
 
 -- Lines after scroll
@@ -36,4 +38,3 @@ vim.opt.scrolloff = 8
 
 -- Updatetime
 vim.opt.updatetime = 50
-
