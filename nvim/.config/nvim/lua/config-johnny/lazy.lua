@@ -25,16 +25,12 @@ local plugins = {
     -- Telescope
     {
         'nvim-telescope/telescope.nvim',
-        tag = '0.1.1',
-        -- or                              , branch = '0.1.1',
+        tag = '0.1.4',
+        -- or                              , branch = '0.1.x',
         dependencies = { 'nvim-lua/plenary.nvim' }
     },
-
     -- Harpoon
     "ThePrimeagen/harpoon",
-
-    -- Vim practice
-    "ThePrimeagen/vim-be-good",
 
     -- Undotree
     "mbbill/undotree",
@@ -57,7 +53,13 @@ local plugins = {
             -- Autocompletion
             { 'hrsh7th/nvim-cmp' },     -- Required
             { 'hrsh7th/cmp-nvim-lsp' }, -- Required
-            { 'L3MON4D3/LuaSnip' },     -- Required
+            {
+                'L3MON4D3/LuaSnip',
+                -- follow latest release.
+                version = "2.*", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
+                -- install jsregexp (optional!).
+                build = "make install_jsregexp"
+            }, -- Required
         }
     },
 
@@ -90,7 +92,6 @@ local plugins = {
     --     end,
     -- },
 
-    --
     -- Multi cursor
     'mg979/vim-visual-multi',
 
@@ -110,14 +111,14 @@ local plugins = {
     },
 
     -- Noice
-    {
-        "folke/noice.nvim",
-        event = "VeryLazy",
-        opts = {},
-        dependencies = {
-            "MunifTanjim/nui.nvim",
-        }
-    }
+    -- {
+    --     "folke/noice.nvim",
+    --     event = "VeryLazy",
+    --     opts = {},
+    --     dependencies = {
+    --         "MunifTanjim/nui.nvim",
+    --     }
+    -- }
 
 
 }
