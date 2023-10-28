@@ -3,12 +3,13 @@ vim.g.mapleader = " "
 
 vim.keymap.set("n", "<leader>pv", vim.cmd.Ex)
 
--- Center screen y position
+-- Save and format 
 vim.keymap.set("n", "<leader>w", function()
     vim.lsp.buf.format()
-    vim.cmd('w')
+    -- vim.cmd('w')
 end)
 
+-- Center screen y position
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
 vim.keymap.set("n", "G", "Gzz")
