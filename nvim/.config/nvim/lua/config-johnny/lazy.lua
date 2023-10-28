@@ -53,13 +53,6 @@ local plugins = {
             -- Autocompletion
             { 'hrsh7th/nvim-cmp' },     -- Required
             { 'hrsh7th/cmp-nvim-lsp' }, -- Required
-            {
-                'L3MON4D3/LuaSnip',
-                -- follow latest release.
-                version = "2.*", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
-                -- install jsregexp (optional!).
-                build = "make install_jsregexp"
-            }, -- Required
         }
     },
 
@@ -109,6 +102,16 @@ local plugins = {
         'VonHeikemen/fine-cmdline.nvim',
         dependencies = { "MunifTanjim/nui.nvim" }
     },
+
+    -- Lua snip
+    {
+
+        'L3MON4D3/LuaSnip',
+        -- follow latest release.
+        version = "2.0.0", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
+        -- install jsregexp (optional!).
+        build = "make install_jsregexp"
+    }, -- Required
 
     -- Noice
     -- {
