@@ -1,5 +1,5 @@
 local ls = require("luasnip")
--- local fmt = require("luasnip.extras.fmt").fmt
+local fmt = require("luasnip.extras.fmt").fmt
 local s = ls.snippet
 -- local sn = ls.snippet_node
 local t = ls.text_node
@@ -67,23 +67,26 @@ function GetScriptFileName()
     end
 end
 
-ls.add_snippets('all', {
-    s('<>', {
-        t("<"),
-        i(1),
-        t(">"),
-        i(2),
-        t("</>"),
-    })
-})
+-- ls.add_snippets('all', {
+--     s('<', fmt({ "<{}></{}>", i(1), rep(1) }))
+-- })
 
-ls.add_snippets('all', {
+ls.add_snippets('typescriptreact', {
     s('rfun', {
         t("export default function "),
         i(1, GetScriptFileName()),
-        t({ "() {", "    return (", "    <>", "" }),
-        i(2, "        " .. rep(1)),
-        t({ "", "    </>", "    )", "}" })
+        t({ "() {", "    return (", "        <>", "" }),
+        i(2, "            " .. GetScriptFileName()),
+        t({ "", "        </>", "    )", "}" })
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('af', {
+        t("const "),
+        i(1),
+        t(" = () => {"),
+        t({ "", "}" })
     })
 })
 
