@@ -6,7 +6,7 @@ vim.keymap.set("n", "<leader>pv", vim.cmd.Ex)
 -- Save and format 
 vim.keymap.set("n", "<leader>w", function()
     vim.lsp.buf.format()
-    -- vim.cmd('w')
+    vim.cmd('w')
 end)
 
 -- Center screen y position
