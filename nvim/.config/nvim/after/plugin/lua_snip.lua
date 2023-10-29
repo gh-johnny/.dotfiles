@@ -101,6 +101,16 @@ ls.add_snippets('typescriptreact', {
 })
 
 ls.add_snippets('typescriptreact', {
+    s('button', {
+        t("<button "),
+        i(1),
+        t(">"),
+        i(2),
+        t("</button>"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
     s('section', {
         t("<section "),
         i(1),
