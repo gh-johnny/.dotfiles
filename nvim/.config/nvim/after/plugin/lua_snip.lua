@@ -160,6 +160,26 @@ ls.add_snippets('typescriptreact', {
     })
 })
 
+ls.add_snippets('typescriptreact', {
+    s('us', {
+        t("const ["),
+        i(1),
+        t(", "),
+        i(2),
+        t("] = useState("),
+        i(3),
+        t(")"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('ue', {
+        t("useEffect(() => {"),
+        i(1),
+        t({ "", "}, [])" }),
+    })
+})
+
 -- ls.add_snippets("all", {
 --     s("autotrigger", {
 --         t("autosnippet"),
