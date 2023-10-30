@@ -161,6 +161,16 @@ ls.add_snippets('typescriptreact', {
 })
 
 ls.add_snippets('typescriptreact', {
+    s('label', {
+        t("<label "),
+        i(1),
+        t(">"),
+        i(2),
+        t("</label>"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
     s('us', {
         t("const ["),
         i(1),
@@ -174,7 +184,7 @@ ls.add_snippets('typescriptreact', {
 
 ls.add_snippets('typescriptreact', {
     s('ue', {
-        t("useEffect(() => {"),
+        t({ "useEffect(() => {", "" }),
         i(1),
         t({ "", "}, [])" }),
     })
