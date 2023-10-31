@@ -86,7 +86,7 @@ local plugins = {
     -- },
 
     -- Multi cursor
-    'mg979/vim-visual-multi',
+    -- 'mg979/vim-visual-multi',
 
     -- Comments
     'terrortylor/nvim-comment',
