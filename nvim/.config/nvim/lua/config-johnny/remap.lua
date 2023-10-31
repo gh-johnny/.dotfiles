@@ -3,7 +3,7 @@ vim.g.mapleader = " "
 
 vim.keymap.set("n", "<leader>pv", vim.cmd.Ex)
 
--- Save and format 
+-- Save and format
 vim.keymap.set("n", "<leader>w", function()
     vim.lsp.buf.format()
     vim.cmd('w')
@@ -25,14 +25,8 @@ vim.keymap.set("v", "<leader>y", '"+y')
 vim.keymap.set("v", "<leader>Y", '"+Y')
 vim.keymap.set("n", "<leader>y", '"+y')
 vim.keymap.set("n", "<leader>Y", '"+Y')
--- vim.keymap.set("v", "<leader>pa", '"+p')
--- vim.keymap.set("v", "<leader>Pa", '"+P')
--- vim.keymap.set("n", "<leader>pa", '"+p')
--- vim.keymap.set("n", "<leader>Pa", '"+P')
 
--- Saving
--- vim.keymap.set("n", "<Esc>", "<Esc><Cmd>w<CR>")
--- vim.keymap.set("v", "<Esc>", "<Esc><Cmd>w<CR>")
--- vim.keymap.set("i", "<Esc>", "<Esc><Cmd>w<CR>")
+vim.keymap.set("x", "<leader>p", "\" +y")
+
 vim.keymap.set("n", "<Control>z", "<Cmd>w<CR><Control>z")
 vim.keymap.set("v", "<Control>z", "<Cmd>w<CR><Control>z")
