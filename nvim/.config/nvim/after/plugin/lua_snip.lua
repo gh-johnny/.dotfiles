@@ -91,6 +91,26 @@ ls.add_snippets('typescriptreact', {
 })
 
 ls.add_snippets('typescriptreact', {
+    s('div', {
+        t("<div "),
+        i(1),
+        t(">"),
+        i(2),
+        t("</div>"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('button', {
+        t("<button "),
+        i(1),
+        t(">"),
+        i(2),
+        t("</button>"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
     s('section', {
         t("<section "),
         i(1),
@@ -137,6 +157,36 @@ ls.add_snippets('typescriptreact', {
         t(">"),
         i(2),
         t("</footer>"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('label', {
+        t("<label "),
+        i(1),
+        t(">"),
+        i(2),
+        t("</label>"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('us', {
+        t("const ["),
+        i(1),
+        t(", "),
+        i(2),
+        t("] = useState("),
+        i(3),
+        t(")"),
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('ue', {
+        t({ "useEffect(() => {", "" }),
+        i(1),
+        t({ "", "}, [])" }),
     })
 })
 
