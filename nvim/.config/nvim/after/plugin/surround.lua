@@ -860,32 +860,4 @@ M.buffer_setup = function(buffer_opts)
     vim.b[0].nvim_surround_buffer_opts = M.merge_opts(M.get_opts(), buffer_opts)
     M.set_keymaps({ buffer = true })
 end
-
--- Surround word
-vim.keymap.set("n", "<leader>s)", "ysiw)")
-vim.keymap.set("n", "<leader>s(", "ysiw)")
-
--- Make string
-vim.keymap.set("n", '<leader>s"', 'ys$"')
-vim.keymap.set("n", "<leader>s'", "ys$'")
-
--- Delete around
-vim.keymap.set("n", "<leader>sd]", "ds]")
-vim.keymap.set("n", "<leader>sd[", "ds]")
-vim.keymap.set("n", "<leader>sd}", "ds}")
-vim.keymap.set("n", "<leader>sd{", "ds}")
-vim.keymap.set("n", "<leader>sd)", "ds)")
-vim.keymap.set("n", "<leader>sd(", "ds)")
-vim.keymap.set("n", "<leader>sd'", "ds'")
-vim.keymap.set("n", '<leader>sd"', 'ds"')
-vim.keymap.set("n", "<leader>sd`", "ds`")
-vim.keymap.set("n", "<leader>sd<", "dst")
-vim.keymap.set("n", "<leader>sd>", "dst")
-
--- Change html tag
-vim.keymap.set("n", "<leader>c<", "cst")
-vim.keymap.set("n", "<leader>c>", "cst")
-
-
-
 return M
