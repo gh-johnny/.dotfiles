@@ -170,6 +170,15 @@ ls.add_snippets('typescriptreact', {
     })
 })
 
+ls.add_snippets('typescript', {
+    s('try', {
+        t({ 'try {', '    ' }),
+        i(1),
+        t({ '    ', '} catch(err) {', '' }),
+        t({ '    console.log(err)', '}' })
+    })
+})
+
 ls.add_snippets('typescriptreact', {
     s('us', {
         t("const ["),
