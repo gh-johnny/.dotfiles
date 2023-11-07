@@ -56,6 +56,7 @@ export MOZILLA_HOME=~/.config/.mozilla
 # Aliases
 alias src="source ~/.zshrc"
 alias nv="nvim"
+alias v="nvim ."
 alias kill="kill -9"
 alias ls="ls -m --color=auto"
 alias ll="ls -l"
@@ -74,6 +75,7 @@ alias wifimenu=~/.dotfiles/local/.local/bin/wifimenu
 alias screenadd=~/.dotfiles/local/.local/bin/screenadd
 alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
 alias cat="bat"
+alias dot="cd ~/.dotfiles"
 
 # Set to vi mode in cli
 set -o vi
