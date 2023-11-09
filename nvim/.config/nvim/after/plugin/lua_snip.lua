@@ -179,6 +179,22 @@ ls.add_snippets('typescript', {
     })
 })
 
+ls.add_snippets('typescript', {
+    s('c', {
+        t('console.log('),
+        i(1),
+        t(')')
+    })
+})
+
+ls.add_snippets('typescriptreact', {
+    s('c', {
+        t('console.log('),
+        i(1),
+        t(')')
+    })
+})
+
 ls.add_snippets('typescriptreact', {
     s('us', {
         t("const ["),
