@@ -81,6 +81,9 @@ local plugins = {
         -- install jsregexp (optional!).
         build = "make install_jsregexp"
     }, -- Required
+
+    -- Git signs
+    'lewis6991/gitsigns.nvim'
 }
 
 
