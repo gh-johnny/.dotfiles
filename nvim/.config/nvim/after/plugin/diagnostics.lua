@@ -5,15 +5,15 @@ for type, icon in pairs(signs) do
 end
 
 vim.diagnostic.config({
-    virtual_text = {
-        prefix = ' 󱠇 ', },
+    virtual_text  = {
+        prefix = ' 󰛊 ', },
     severity_sort = true,
-    float = {
+    float         = {
         source = "always", -- Or "if_many"
     },
 })
 
-vim.api.nvim_set_keymap('n', '<leader>do', '<cmd>lua vim.diagnostic.open_float()<CR>zz4<C-e>',
+vim.api.nvim_set_keymap('n', '<leader>do', '<cmd>lua vim.diagnostic.open_float()<CR>zz2<C-e>',
     { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<leader>dp', '<cmd>lua vim.diagnostic.goto_prev()<CR>zz4<C-e>',
     { noremap = true, silent = true })
