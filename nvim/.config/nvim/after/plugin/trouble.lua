@@ -1,7 +1,7 @@
 -- Lua
-vim.keymap.set("n", "<C-t>", "<Cmd>TroubleToggle<CR>")
--- vim.keymap.set("n", "<C-t>", function() require("trouble").open() end)
--- vim.keymap.set("n", "<C-t>", function() require("trouble").close() end)
+-- vim.keymap.set("n", "<C-t>", "<Cmd>TroubleToggle<CR>")
+vim.keymap.set("n", "<C-t>", function() require("trouble").open() end)
+vim.keymap.set("n", "q", function() require("trouble").close() end)
 
 -- vim.keymap.set("n", "<leader>xw", function() require("trouble").open("workspace_diagnostics") end)
 -- vim.keymap.set("n", "<leader>xd", function() require("trouble").open("document_diagnostics") end)
