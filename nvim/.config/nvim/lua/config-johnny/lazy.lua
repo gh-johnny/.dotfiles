@@ -60,33 +60,7 @@ local plugins = {
     {
         'nvim-lualine/lualine.nvim',
         requires = { 'nvim-tree/nvim-web-devicons', opt = true }
-
     },
-    -- 'feline-nvim/feline.nvim',
-    -- {
-    --     "arsham/arshamiser.nvim",
-    --     dependencies = {
-    --         "arsham/arshlib.nvim",
-    --         "famiu/feline.nvim",
-    --         "rebelot/heirline.nvim",
-    --         -- "kyazdani42/nvim-web-devicons",
-    --     },
-    --     config = function()
-    --         -- ignore any parts you don't want to use
-    --         vim.cmd.colorscheme("arshamiser_light")
-    --         require("arshamiser.feliniser")
-    --         -- or:
-    --         require("arshamiser.heirliniser")
-    --
-    --         _G.custom_foldtext = require("arshamiser.folding").foldtext
-    --         vim.opt.foldtext = "v:lua.custom_foldtext()"
-    --         -- if you want to draw a tabline:
-    --         vim.api.nvim_set_option("tabline", [[%{%v:lua.require("arshamiser.tabline").draw()%}]])
-    --     end,
-    -- },
-
-    -- Multi cursor
-    -- 'mg979/vim-visual-multi',
 
     -- Comments
     'terrortylor/nvim-comment',
@@ -97,15 +71,8 @@ local plugins = {
         dependencies = { "nvim-tree/nvim-web-devicons" },
     },
 
-    -- CmdLine ( Command line )
-    {
-        'VonHeikemen/fine-cmdline.nvim',
-        dependencies = { "MunifTanjim/nui.nvim" }
-    },
-
     -- Lua snip
     {
-
         'L3MON4D3/LuaSnip',
         -- follow latest release.
         version = "2.0.0", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
@@ -113,27 +80,11 @@ local plugins = {
         build = "make install_jsregexp"
     }, -- Required
 
-    {
-        "kylechui/nvim-surround",
-        version = "*", -- Use for stability; omit to use `main` branch for the latest features
-        event = "VeryLazy",
-        config = function()
-            require("nvim-surround").setup({
-                -- Configuration here, or leave empty to use defaults
-            })
-        end
-    }
+    -- Vim fugitive
+    'tpope/vim-fugitive',
 
-    -- Noice
-    -- {
-    --     "folke/noice.nvim",
-    --     event = "VeryLazy",
-    --     opts = {},
-    --     dependencies = {
-    --         "MunifTanjim/nui.nvim",
-    --     }
-    -- }
-
+    -- Git signs
+    'lewis6991/gitsigns.nvim',
 
 }
 
