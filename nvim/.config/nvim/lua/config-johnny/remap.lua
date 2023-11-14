@@ -14,8 +14,8 @@ end)
 -- end)
 
 -- Center screen y position
-vim.keymap.set("n", "<C-d>", "<C-d>zz")
-vim.keymap.set("n", "<C-u>", "<C-u>zz")
+vim.keymap.set("n", "<C-d>", "<C-d>zz4<C-e>")
+vim.keymap.set("n", "<C-u>", "<C-u>zz4<C-e>")
 vim.keymap.set("n", "G", "Gzz")
 vim.keymap.set("n", "n", "nzzzv")
 vim.keymap.set("n", "N", "Nzzzv")
@@ -42,28 +42,3 @@ vim.keymap.set("v", "<Control>z", "<Cmd>w<CR><Control>z")
 vim.keymap.set("n", "<leader><leader>s", function()
     vim.cmd("so")
 end)
-
--- Surround word
-vim.keymap.set("n", "<leader>s)", "ysiw)")
-vim.keymap.set("n", "<leader>s(", "ysiw)")
-
--- Make string
-vim.keymap.set("n", '<leader>s"', 'ys$"')
-vim.keymap.set("n", "<leader>s'", "ys$'")
-
--- Delete around
-vim.keymap.set("n", "<leader>sd]", "ds]")
-vim.keymap.set("n", "<leader>sd[", "ds]")
-vim.keymap.set("n", "<leader>sd}", "ds}")
-vim.keymap.set("n", "<leader>sd{", "ds}")
-vim.keymap.set("n", "<leader>sd)", "ds)")
-vim.keymap.set("n", "<leader>sd(", "ds)")
-vim.keymap.set("n", "<leader>sd'", "ds'")
-vim.keymap.set("n", '<leader>sd"', 'ds"')
-vim.keymap.set("n", "<leader>sd`", "ds`")
-vim.keymap.set("n", "<leader>sd<", "dst")
-vim.keymap.set("n", "<leader>sd>", "dst")
-
--- Change html tag
-vim.keymap.set("n", "<leader>c<", "cst")
-vim.keymap.set("n", "<leader>c>", "cst")
