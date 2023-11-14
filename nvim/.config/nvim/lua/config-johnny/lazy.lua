@@ -60,7 +60,6 @@ local plugins = {
     {
         'nvim-lualine/lualine.nvim',
         requires = { 'nvim-tree/nvim-web-devicons', opt = true }
-
     },
 
     -- Comments
@@ -74,7 +73,6 @@ local plugins = {
 
     -- Lua snip
     {
-
         'L3MON4D3/LuaSnip',
         -- follow latest release.
         version = "2.0.0", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
@@ -82,8 +80,12 @@ local plugins = {
         build = "make install_jsregexp"
     }, -- Required
 
+    -- Vim fugitive
+    'tpope/vim-fugitive',
+
     -- Git signs
-    'lewis6991/gitsigns.nvim'
+    'lewis6991/gitsigns.nvim',
+
 }
 
 
