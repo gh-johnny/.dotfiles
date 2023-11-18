@@ -11,12 +11,15 @@ vim.keymap.set("n", "<leader>w", function()
 end)
 
 -- Center screen y position
-vim.keymap.set("n", "zz", "zz5<C-e>")
-vim.keymap.set("n", "<C-d>", "<C-d>zz5<C-e>")
+vim.keymap.set("n", "zz", "zz")
+vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
-vim.keymap.set("n", "G", "Gzz5<C-e>")
+vim.keymap.set("n", "G", "Gzz")
 vim.keymap.set("n", "n", "nzzzv")
 vim.keymap.set("n", "N", "Nzzzv")
+
+-- Center horizontally
+vim.keymap.set("n", "zs", "zs20zh")
 
 -- Drag line(s)
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")
@@ -30,6 +33,7 @@ vim.keymap.set("n", "<leader>Y", '"+Y')
 
 -- Fat finger
 vim.keymap.set("n", "<leader>p", '')
+vim.keymap.set("n", "<leader>d", '')
 
 -- Greatest remap ever
 vim.keymap.set("x", "p", "\"_dP")
