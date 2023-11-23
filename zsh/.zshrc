@@ -57,6 +57,7 @@ export MOZILLA_HOME=~/.config/.mozilla
 alias src="source ~/.zshrc"
 alias nv="nvim"
 alias v="nvim ."
+alias git-flow="git log --all --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit" 
 alias kill="kill -9"
 alias ls="ls -m --color=auto"
 alias ll="ls -l"
