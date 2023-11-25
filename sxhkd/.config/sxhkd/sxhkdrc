@@ -13,6 +13,11 @@ super + shift + e
         ~/.config/rofi/launchers/emoji_launcher/launcher.sh
 
 
+# server laucher
+super + t 
+    ~/.local/bin/connectserver
+
+
 # Printscreen
 @Print
         flameshot gui
