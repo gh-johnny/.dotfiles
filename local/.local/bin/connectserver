@@ -1,5 +1,0 @@
-#!/bin/sh
-
-server='root@xx.xx.xxx.xx'
-
-wezterm ssh $server &; exit
