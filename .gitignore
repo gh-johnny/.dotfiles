@@ -6,7 +6,7 @@ local/.local/share/recently-used.xbel
 
 local/.local/bin/bluetoothheadphones
 
-local/.loca/bin/connectserver
+local/.local/bin/connectserver
 
 nvim/.config/nvim/lazy-lock.json
 
