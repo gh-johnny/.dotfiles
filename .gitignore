@@ -4,10 +4,6 @@ local/.local/state/*
 
 local/.local/share/recently-used.xbel
 
-local/.local/bin/bluetoothheadphones
-
-local/.local/bin/connectserver
-
 nvim/.config/nvim/lazy-lock.json
 
 local/.local/state/lesshst
