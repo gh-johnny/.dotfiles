@@ -77,7 +77,7 @@ alias screenadd=~/.dotfiles/local/.local/bin/screenadd
 alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
 alias cat="bat"
 alias dot="cd ~/.dotfiles"
-alias server=~/.dotfiles/local/.local/bin/connectserver
+alias server='xdotool key --clearmodifiers Super+t && exit'
 
 # Set to vi mode in cli
 set -o vi
