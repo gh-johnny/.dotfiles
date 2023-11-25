@@ -46,8 +46,9 @@ cd ~/.dotfiles &&
 stow */ &&
 
 # Tilling window/desktop manager
-# Recommended to install with option 1 ( the rest may install with default options and it should be ok for most systems )
+# Recommended to install with OPTION 1 ( the rest may install with default options and it should be ok for most systems )
 sudo pacman -S i3 &&
+sudo pacman -S i3lock &&
 
 # Installing aur helper ( yay ) 
 git clone https://aur.archlinux.org/yay-git.git &&
@@ -69,13 +70,20 @@ sudo pacman -S xorg &&
 
 # Terminal
 sudo pacman -S alacritty &&
+# sudo pacman -S wezterm &&
 
-# Text editors + hide mouse 
+# Text editors 
 sudo pacman -S vim &&
 sudo pacman -S neovim && 
+
+# For fzf
+sudo pacman -S fzf && 
+sudo pacman -S ripgrep && 
+
+# Hide mouse bin
 sudo pamcan -S unclutter &&
 
-#l App launcher and more
+# App launcher and more
 sudo pacman -S rofi &&
 
 # Status bar for desktop
@@ -85,7 +93,7 @@ sudo pacman -S polybar &&
 sudo pacman -S dunst &&
 sudo pacman -S libnotify &&
 
-# To better use cron jobs ( source the file later on with: crontab mycron )
+# To customize and acitvate your cron jobs ( source the file later on with: crontab mycron )
 # To activate cron job system
 sudo pacman -S cronie &&
 sudo systemctl enable cronie &&
@@ -108,6 +116,7 @@ sudo pacman -S nitrogen &&
 
 # Audio manager 
 sudo pacman -S pamixer &&
+sudo pacman -S alsamixer &&
 sudo pacman -S alsa-utils &&
 sudo pacman -S pavucontrol &&
 sudo usermod -aG audio $USER &&
@@ -128,7 +137,6 @@ yay -S picom-git &&
 sudo pacman -S ly &&
 systemctl enable ly.service &&
 systemctl disable getty@tty2.service &&
-
 
 # Make custom log dir ( still in development )
 # mkdir -p ~/.logs/polybar_logs && mkdir -p ~/.logs/cron_logs &&
