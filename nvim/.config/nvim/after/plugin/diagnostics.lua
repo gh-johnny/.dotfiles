@@ -13,7 +13,7 @@ vim.diagnostic.config({
     },
 })
 
-vim.api.nvim_set_keymap('n', '<leader>do', '<cmd>lua vim.diagnostic.open_float()<CR>zz2<C-e>',
+vim.api.nvim_set_keymap('n', '<leader>do', '<cmd>lua vim.diagnostic.open_float()<CR>zz',
     { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<leader>dp', '<cmd>lua vim.diagnostic.goto_prev()<CR>zz',
     { noremap = true, silent = true })

@@ -10,6 +10,7 @@ vim.keymap.set("n", "<leader>w", function()
     vim.cmd('w')
 end)
 
+
 -- Center screen y position
 vim.keymap.set("n", "zz", "zz")
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
@@ -37,7 +38,12 @@ vim.keymap.set("n", "<leader>d", '')
 
 -- Greatest remap ever
 vim.keymap.set("x", "p", "\"_dP")
+
+-- Replaces the current registry in all file
 vim.keymap.set("n", "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
+
+-- Searches for the current word and activates cgn so that we can replace the next occurences
+vim.keymap.set('n', 'cgn', '*#cgn')
 
 -- Save all when nvim is suspended
 vim.keymap.set("n", "<Control>z", "<Cmd>wa<CR><Control>z")
