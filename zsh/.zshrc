@@ -78,6 +78,7 @@ alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
 alias cat="bat"
 alias dot="cd ~/.dotfiles"
 alias server='xdotool key --clearmodifiers Super+t && exit'
+alias planner='~/.dotfiles/local/.local/bin/projectstart && exit' 
 
 # Set to vi mode in cli
 set -o vi
