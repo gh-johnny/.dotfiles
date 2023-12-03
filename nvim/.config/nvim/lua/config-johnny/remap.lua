@@ -35,7 +35,7 @@ vim.keymap.set("n", "Y", '"+Y')
 -- Control + c is the same as Esc
 vim.keymap.set("n", "<C-c>", '<Esc>')
 
--- Greatest remap ever
+-- Cutting won't overwrite current paste register
 vim.keymap.set("x", "p", "\"_dP")
 
 -- Replaces the current registry in all file
@@ -43,6 +43,10 @@ vim.keymap.set("n", "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><
 
 -- Searches for the current word and activates cgn so that we can replace the next occurences
 vim.keymap.set('n', 'cgn', '*#cgn')
+
+-- Incremental search trough quickfix list
+vim.keymap.set('n', '<C-n>', ':cnext')
+vim.keymap.set('n', '<C-N>', ':cprevious')
 
 -- Save all when nvim is suspended
 vim.keymap.set("n", "<Control>z", "<Cmd>wa<CR><Control>z")
