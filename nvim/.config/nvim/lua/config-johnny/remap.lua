@@ -32,9 +32,8 @@ vim.keymap.set("v", "Y", '"+Y')
 vim.keymap.set("n", "y", '"+y')
 vim.keymap.set("n", "Y", '"+Y')
 
--- Fat finger
-vim.keymap.set("n", "<leader>p", '')
-vim.keymap.set("n", "<leader>d", '')
+-- Control + c is the same as Esc
+vim.keymap.set("n", "<C-c>", '<Esc>')
 
 -- Greatest remap ever
 vim.keymap.set("x", "p", "\"_dP")
