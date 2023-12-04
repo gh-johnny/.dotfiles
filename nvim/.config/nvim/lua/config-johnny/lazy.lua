@@ -14,7 +14,10 @@ vim.opt.rtp:prepend(lazypath)
 local plugins = {
 
     -- Color scheme
-    { "catppuccin/nvim", name = "catppuccin" },
+    { "catppuccin/nvim",           name = "catppuccin" },
+
+    -- Transparency
+    { "xiyaowong/transparent.nvim" },
 
     -- Treesiter
     {
