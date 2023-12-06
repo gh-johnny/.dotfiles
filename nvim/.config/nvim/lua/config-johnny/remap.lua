@@ -45,8 +45,8 @@ vim.keymap.set("n", "<leader>r", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><
 vim.keymap.set('n', 'cgn', '*#cgn')
 
 -- Incremental search trough quickfix list
-vim.keymap.set('n', '<C-n>', ':cnext')
-vim.keymap.set('n', '<C-N>', ':cprevious')
+vim.keymap.set('n', '<C-n>', '<Cmd>cnext<CR>')
+vim.keymap.set('n', '<C-N>', '<Cmd>cprevious<CR>')
 
 -- Save all when nvim is suspended
 vim.keymap.set("n", "<Control>z", "<Cmd>wa<CR><Control>z")

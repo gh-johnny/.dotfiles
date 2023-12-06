@@ -83,6 +83,9 @@ local plugins = {
     -- Git signs
     'lewis6991/gitsigns.nvim',
 
+    -- Visual marks
+    { 'chentoast/marks.nvim' },
+
 }
 
 
