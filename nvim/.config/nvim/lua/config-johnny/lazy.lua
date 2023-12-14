@@ -82,6 +82,15 @@ local plugins = {
 
     -- Git signs
     'lewis6991/gitsigns.nvim',
+
+    -- Import cost
+    {
+        'barrett-ruth/import-cost.nvim',
+        build = 'sh install.sh yarn',
+        -- if on windows
+        -- build = 'pwsh install.ps1 yarn',
+        config = true
+    },
 }
 
 
