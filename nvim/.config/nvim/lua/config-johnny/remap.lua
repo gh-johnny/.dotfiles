@@ -20,7 +20,7 @@ vim.keymap.set("n", "n", "nzzzv")
 vim.keymap.set("n", "N", "Nzzzv")
 
 -- Center horizontally
-vim.keymap.set("n", "zs", "zs60zh")
+vim.keymap.set("n", "zs", "zs50zh")
 
 -- Drag line(s)
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")

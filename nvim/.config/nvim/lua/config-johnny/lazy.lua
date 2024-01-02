@@ -91,6 +91,13 @@ local plugins = {
         -- build = 'pwsh install.ps1 yarn',
         config = true
     },
+
+
+    -- Autotag for frontend sh*t, pls end my suffering
+    {
+        'windwp/nvim-ts-autotag'
+    },
+
 }
 
 
