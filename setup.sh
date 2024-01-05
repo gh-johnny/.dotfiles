@@ -70,7 +70,11 @@ sudo pacman -S xorg &&
 
 # Terminal
 sudo pacman -S alacritty &&
-# sudo pacman -S wezterm &&
+sudo pacman -S wezterm &&
+
+## Tmux ( terminal multiplexer )
+sudo pacman -S tmux &&
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm &&
 
 # Text editors 
 sudo pacman -S vim &&
