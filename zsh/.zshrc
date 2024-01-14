@@ -79,6 +79,7 @@ alias cat="bat"
 alias dot="cd ~/.dotfiles"
 alias server='xdotool key --clearmodifiers Super+t && exit'
 alias planner='~/.dotfiles/local/.local/bin/projectstart && exit' 
+alias tmux='tmux -2'
 
 # Set to vi mode in cli
 set -o vi
