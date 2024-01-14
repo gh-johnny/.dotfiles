@@ -44,7 +44,7 @@ require("catppuccin").setup({
 })
 
 -- setup must be called before loading
-vim.cmd.colorscheme "catppuccin"  
+vim.cmd.colorscheme "catppuccin"
 
 -- Will returns a table where the key is the name of the color and the value is its hex value corresponding to each flavour.
 
