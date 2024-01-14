@@ -10,9 +10,7 @@ vim.keymap.set("n", "<leader>w", function()
     vim.cmd('w')
 end)
 
-
 -- Center screen y position
-vim.keymap.set("n", "zz", "zz")
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
 vim.keymap.set("n", "G", "Gzz")

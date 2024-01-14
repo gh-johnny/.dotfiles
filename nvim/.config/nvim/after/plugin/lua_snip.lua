@@ -74,9 +74,9 @@ end
 ls.add_snippets('typescriptreact', {
     s('rfun', {
         t("export default function "),
-        i(1, GetScriptFileName()),
+        i(1, 'Compo'),
         t({ "() {", "    return (", "        <>", "" }),
-        i(2, "            " .. GetScriptFileName()),
+        i(2, "            "),
         t({ "", "        </>", "    )", "}" })
     })
 })
