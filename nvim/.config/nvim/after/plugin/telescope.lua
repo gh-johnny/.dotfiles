@@ -9,7 +9,7 @@ function Live_grep_git_dir()
     builtin.live_grep(opts)
 end
 
-vim.keymap.set('n', '<leader>fg', '<Cmd>lua live_grep_git_dir()<CR>')
+vim.keymap.set('n', '<leader>fg', '<Cmd>lua Live_grep_git_dir()<CR>')
 vim.keymap.set('n', '<leader>pf', builtin.find_files, {})
 -- vim.keymap.set('n', '<leader>fg', builtin.live_grep, {})
 vim.keymap.set('n', '<C-p>', builtin.git_files, {})
