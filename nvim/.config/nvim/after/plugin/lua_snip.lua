@@ -70,6 +70,25 @@ end
 -- ls.add_snippets('all', {
 --     s('<', fmt({ "<{}></{}>", i(1), rep(1) }))
 -- })
+ls.add_snippets('css', {
+    s("{", {
+        t({ "{", "    " }),
+        i(1),
+        t({ "", "}" })
+    }),
+}, {
+    type = "autosnippets",
+    key = "all_auto",
+})
+
+-- ls.add_snippets("all", {
+--     s("autotrigger", {
+--         t("autosnippet"),
+--     }),
+-- }, {
+--     type = "autosnippets",
+--     key = "all_auto",
+-- })
 
 ls.add_snippets('typescriptreact', {
     s('rfun', {
