@@ -18,10 +18,12 @@ super + t
     ~/.local/bin/connectserver
 
 
+super + shift + q
+    ~/.local/bin/powermenu
+
 # Printscreen
 @Print
         flameshot gui
-
 
 # Brightness
 XF86MonBrightnessUp
