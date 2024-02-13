@@ -68,8 +68,8 @@ alias ssh="TERM=xterm-256color $(which ssh)"
 alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
-alias screenshot="flameshot"
 alias .....="cd ../../../.."
+alias screenshot="flameshot"
 alias brightness=~/.dotfiles/local/.local/bin/changebrightness
 alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
 alias wifimenu=~/.dotfiles/local/.local/bin/wifimenu
@@ -80,6 +80,7 @@ alias dot="cd ~/.dotfiles"
 alias server='xdotool key --clearmodifiers Super+t && exit'
 alias planner='~/.dotfiles/local/.local/bin/projectstart && exit' 
 alias tmux='tmux -2'
+alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
 
 # Set to vi mode in cli
 set -o vi
