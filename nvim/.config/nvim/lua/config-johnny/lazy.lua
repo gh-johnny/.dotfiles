@@ -92,6 +92,13 @@ local plugins = {
         config = true
     },
 
+    -- Markdow visualizer
+    {
+        "iamcco/markdown-preview.nvim",
+        cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
+        ft = { "markdown" },
+        build = function() vim.fn["mkdp#util#install"]() end,
+    },
 
     -- Autotag for frontend sh*t, pls end my suffering
     {
