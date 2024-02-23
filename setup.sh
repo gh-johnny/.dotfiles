@@ -83,6 +83,7 @@ sudo pacman -S neovim &&
 # For fzf
 sudo pacman -S fzf && 
 sudo pacman -S ripgrep && 
+sudo pacman -S fd && 
 
 # Hide mouse bin
 sudo pamcan -S unclutter &&

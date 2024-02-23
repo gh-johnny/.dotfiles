@@ -32,6 +32,8 @@ vim.keymap.set("n", "Y", '"+Y')
 
 -- Control + c is the same as Esc
 vim.keymap.set("n", "<C-c>", '<Esc>')
+vim.keymap.set("i", "<C-c>", '<Esc>')
+vim.keymap.set("x", "<C-c>", '<Esc>')
 
 -- Cutting won't overwrite current paste register
 vim.keymap.set("x", "p", "\"_dP")

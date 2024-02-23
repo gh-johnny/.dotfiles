@@ -32,6 +32,12 @@ local plugins = {
         -- or                              , branch = '0.1.x',
         dependencies = { 'nvim-lua/plenary.nvim' }
     },
+
+    -- Telescope file browser
+    {
+        "nvim-telescope/telescope-file-browser.nvim",
+        dependencies = { "nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim" }
+    },
     -- Harpoon
     "ThePrimeagen/harpoon",
 
@@ -103,6 +109,11 @@ local plugins = {
     -- Autotag for frontend sh*t, pls end my suffering
     {
         'windwp/nvim-ts-autotag'
+    },
+
+    -- Icons (for telescope file_browser)
+    {
+        'nvim-tree/nvim-web-devicons'
     },
 
 }
