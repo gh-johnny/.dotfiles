@@ -52,10 +52,10 @@ require('telescope').setup {
                     ["c"] = fb_actions.create,          -- Create file/folder at current path (trailing path separator creates folder)
                     ["r"] = fb_actions.rename,          -- Rename multi-selected files/folders
                     ["y"] = fb_actions.copy,            -- Copy (multi-)selected files/folders to current path
-                    ["p"] = fb_actions.move,            -- Move multi-selected files/folders to current path
+                    ["m"] = fb_actions.move,            -- Move multi-selected files/folders to current path
                     ["<S-d>"] = fb_actions.remove,      -- Delete (multi-)selected files/folders
                     ["-"] = fb_actions.goto_parent_dir, -- Go to parent directory
-                    ["<C-b>"] = fb_actions.goto_cwd,    -- Go to current working directory (cwd)
+                    ["<S-b>"] = fb_actions.goto_cwd,    -- Go to current working directory (cwd)
                     ["h"] = fb_actions.toggle_hidden,   -- Toggle hidden files/folders
                 },
             },
