@@ -7,7 +7,7 @@ vim.keymap.set("n", "<leader>q", vim.cmd.Ex)
 -- Save and format
 vim.keymap.set("n", "<leader>w", function()
     vim.lsp.buf.format()
-    vim.cmd('w')
+    vim.cmd('wa')
 end)
 
 -- Center screen y position
@@ -34,6 +34,10 @@ vim.keymap.set("n", "Y", '"+Y')
 vim.keymap.set("n", "<C-c>", '<Esc>')
 vim.keymap.set("i", "<C-c>", '<Esc>')
 vim.keymap.set("x", "<C-c>", '<Esc>')
+
+-- Insert line and goes back to normal mode
+vim.keymap.set("n", "<A-o>", 'o<Esc>')
+vim.keymap.set("n", "<A-O>", 'O<Esc>')
 
 -- Cutting won't overwrite current paste register
 vim.keymap.set("x", "p", "\"_dP")
