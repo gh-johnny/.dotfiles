@@ -32,6 +32,12 @@ local plugins = {
         -- or                              , branch = '0.1.x',
         dependencies = { 'nvim-lua/plenary.nvim' }
     },
+
+    -- Telescope file browser
+    {
+        "nvim-telescope/telescope-file-browser.nvim",
+        dependencies = { "nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim" }
+    },
     -- Harpoon
     "ThePrimeagen/harpoon",
 
