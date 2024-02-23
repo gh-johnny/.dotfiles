@@ -111,6 +111,11 @@ local plugins = {
         'windwp/nvim-ts-autotag'
     },
 
+    -- Icons (for telescope file_browser)
+    {
+        'nvim-tree/nvim-web-devicons'
+    },
+
 }
 
 
