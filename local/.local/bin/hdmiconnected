@@ -1,0 +1,13 @@
+#!/bin/bash
+
+HDMI_STATUS=$(awk 'NR==1 {print $1}' /sys/class/drm/card1-HDMI-A-1/status)
+
+# Check if HDMI is connected
+if [ $HDMI_STATUS = "connected" ]; then
+    echo "HDMI connected"
+    # Add actions to perform when HDMI is connected
+else
+    echo "HDMI disconnected"
+    # Add actions to perform when HDMI is disconnected
+fi
+

@@ -113,8 +113,9 @@ sudo pacman -S sxhkd &&
 # Icon theme for apps in graphical env
 sudo pacman -S papirus-icon-theme &&
 
-# Browser
+# Browsers
 sudo pacman -S firefox &&
+yay -S google-chrome &&
 
 # Wallpaper manager
 sudo pacman -S nitrogen &&
