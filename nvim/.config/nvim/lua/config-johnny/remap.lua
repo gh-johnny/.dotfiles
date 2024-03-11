@@ -4,10 +4,15 @@ vim.g.mapleader = " "
 -- Exit file (default netrw)
 vim.keymap.set("n", "<leader>q", vim.cmd.Ex)
 
--- Save and format
+-- Save
 vim.keymap.set("n", "<leader>w", function()
-    vim.lsp.buf.format()
+    vim.cmd('w')
     vim.cmd('wa')
+end)
+
+-- Format
+vim.keymap.set("n", "<leader>ff", function()
+    vim.lsp.buf.format()
 end)
 
 -- Center screen y position
