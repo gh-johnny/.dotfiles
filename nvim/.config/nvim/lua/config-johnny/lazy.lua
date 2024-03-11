@@ -65,6 +65,13 @@ local plugins = {
         }
     },
 
+    -- Eslint
+    {
+        'neovim/nvim-lspconfig',
+        'MunifTanjim/eslint.nvim',
+        'jose-elias-alvarez/null-ls.nvim'
+    },
+
     -- Status bar
     {
         'nvim-lualine/lualine.nvim',
