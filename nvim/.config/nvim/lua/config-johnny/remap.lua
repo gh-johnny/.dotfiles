@@ -6,12 +6,11 @@ vim.keymap.set("n", "<leader>q", vim.cmd.Ex)
 
 -- Save
 vim.keymap.set("n", "<leader>w", function()
-    vim.cmd('w')
     vim.cmd('wa')
 end)
 
 -- Format
-vim.keymap.set("n", "<leader>ff", function()
+vim.keymap.set("n", "<leader>fo", function()
     vim.lsp.buf.format()
 end)
 
