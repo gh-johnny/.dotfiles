@@ -1,13 +1,19 @@
 #!/bin/bash
 
+ICONS_PATH="$HOME/.local/share/icons/dunst"
+HDMI_SUCCESS_ICON="hdmi-success-icon.png"
+HDMI_ERROR_ICON="hdmi-error-icon.png"
+
 HDMI_STATUS=$(awk 'NR==1 {print $1}' /sys/class/drm/card1-HDMI-A-1/status)
 
 # Check if HDMI is connected
 if [ $HDMI_STATUS = "connected" ]; then
     echo "HDMI connected"
+    notify-send -u low "HDMI Connected" "HMDI1 is connected" -i "$ICONS_PATH/$HDMI_SUCCESS_ICON" -r 9990
     # Add actions to perform when HDMI is connected
 else
     echo "HDMI disconnected"
+    notify-send -u low "HDMI Disconnected" "HMDI1 is disconnected" -i "$ICONS_PATH/$HDMI_ERROR_ICON"-r 9990
     # Add actions to perform when HDMI is disconnected
 fi
 
