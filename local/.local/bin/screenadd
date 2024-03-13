@@ -3,8 +3,16 @@
 # Check if there is exactly one argument
 if [ $# -ne 1 ]; then
     echo "This command requires exactly 1 argument"
-    echo "Available options: --above, --below, --left-of, --right-of, --same-as"
+    echo -e "Available options:\n --above\n --below\n --left-of\n --right-of\n --same-as"
     exit 1
+fi
+
+CHOSEN_DISPLAY="HDMI1"
+XRANDR_ANSWER=$(xrandr | grep "$CHOSEN_DISPLAY" | awk '/ disconnected / {print $2}')
+
+if [ "$XRANDR_ANSWER" = "disconnected" ]; then
+   echo "Could not find the $CHOSEN_DISPLAY connection" 
+   exit 1 
 fi
 
 # Check if the argument matches one of the specified options
