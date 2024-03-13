@@ -1,0 +1,14 @@
+#!/bin/sh
+
+CHOSEN_DISPLAY="HDMI1"
+XRANDR_ANSWER=$(xrandr | grep "$CHOSEN_DISPLAY" | awk '/ connected / {print $2}')
+
+if [ "$XRANDR_ANSWER" = "connected" ]; then
+    nitrogen --head=1 --set-scaled ~/.config/.wallpapers/1920x1080-sunset.png
+else
+    echo "Could not find another display other than main one"
+fi
+
+nitrogen --head=0 --set-scaled ~/.config/.wallpapers/firewatchOrange.jpg
+
+exit 0

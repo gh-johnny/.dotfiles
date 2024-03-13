@@ -18,8 +18,7 @@ fi
 # Check if the argument matches one of the specified options
 if [ "$1" = "--above" ] || [ "$1" = "--below" ] || [ "$1" = "--left-of" ] || [ "$1" = "--right-of" ] || [ "$1" = "--same-as" ]; then
     xrandr --output HDMI1 --auto $1 eDP1
-    nitrogen --head=1 --set-scaled ~/.config/.wallpapers/1920x1080-sunset.png
-    nitrogen --head=0 --set-scaled ~/.config/.wallpapers/firewatchOrange.jpg
+    sh $HOME/.local/bin/wallpaperadd
     exit 0
 else 
     echo "Invalid argument. Available options: --above, --below, --left-of, --right-of, --same-as"
