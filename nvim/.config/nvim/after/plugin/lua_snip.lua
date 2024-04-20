@@ -78,17 +78,38 @@ ls.add_snippets('css', {
     }),
 }, {
     type = "autosnippets",
-    key = "all_auto",
+    key = "css-braces", -- unique id
 })
 
--- ls.add_snippets("all", {
---     s("autotrigger", {
---         t("autosnippet"),
---     }),
--- }, {
---     type = "autosnippets",
---     key = "all_auto",
--- })
+ls.add_snippets("all", {
+    s("{}", {
+        t("{"),
+        i(1),
+        t("}"),
+    }),
+}, {
+    type = "autosnippets",
+})
+
+ls.add_snippets("all", {
+    s("[]", {
+        t("["),
+        i(1),
+        t("]"),
+    }),
+}, {
+    type = "autosnippets",
+})
+
+ls.add_snippets("all", {
+    s("()", {
+        t("("),
+        i(1),
+        t(")"),
+    }),
+}, {
+    type = "autosnippets",
+})
 
 ls.add_snippets('typescriptreact', {
     s('rfun', {

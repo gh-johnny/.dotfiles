@@ -132,6 +132,9 @@ sudo pacman -S flameshot &&
 # Music player
 sudo pacman -S spotify &&
 
+# Business app
+yay -S slack
+
 # Screen brightness manager
 yay -S brillo &&
 
