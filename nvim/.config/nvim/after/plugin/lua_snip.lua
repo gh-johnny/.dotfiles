@@ -1,15 +1,15 @@
 local ls = require("luasnip")
-local fmt = require("luasnip.extras.fmt").fmt
+-- local fmt = require("luasnip.extras.fmt").fmt
 local s = ls.snippet
 -- local sn = ls.snippet_node
 local t = ls.text_node
 local i = ls.insert_node
--- local f = ls.function_node
+local f = ls.function_node
 -- local c = ls.choice_node
 -- local d = ls.dynamic_node
 -- local r = ls.restore_node
 -- local l = require("luasnip.extras").lambda
-local rep = require("luasnip.extras").rep
+-- local rep = require("luasnip.extras").rep
 -- local p = require("luasnip.extras").partial
 -- local m = require("luasnip.extras").match
 -- local n = require("luasnip.extras").nonempty
@@ -21,8 +21,8 @@ local types = require("luasnip.util.types")
 -- local conds_expand = require("luasnip.extras.conditions.expand")
 
 vim.keymap.set({ "i" }, "<C-K>", function() ls.expand() end, { silent = true })
-vim.keymap.set({ "i", "s" }, "<C-L>", function() ls.jump(1) end, { silent = true })
-vim.keymap.set({ "i", "s" }, "<C-J>", function() ls.jump(-1) end, { silent = true })
+vim.keymap.set({ "i", "s" }, "<C-s>", function() ls.jump(1) end, { silent = true })
+vim.keymap.set({ "i", "s" }, "<C-w>", function() ls.jump(-1) end, { silent = true })
 vim.keymap.set('n', '<leader><leader>w',
     "<Cmd>source ~/.dotfiles/nvim/.config/nvim/after/plugin/lua_snip.lua<CR>")
 
@@ -55,21 +55,6 @@ ls.setup({
     end,
 })
 
-function GetScriptFileName()
-    local info = debug.getinfo(2, "S")
-    if info and info.source:sub(1, 1) == "@" then
-        local path = info.source:sub(2)
-        local file = path:match("([^/]+)$")                     -- File name (e.g., file.txt)
-        local fileNameWithoutExtension = file:gsub("%..+$", "") -- File name without extension (e.g., file)
-        return fileNameWithoutExtension
-    else
-        return nil
-    end
-end
-
--- ls.add_snippets('all', {
---     s('<', fmt({ "<{}></{}>", i(1), rep(1) }))
--- })
 ls.add_snippets('css', {
     s("{", {
         t({ "{", "    " }),
@@ -78,27 +63,85 @@ ls.add_snippets('css', {
     }),
 }, {
     type = "autosnippets",
-    key = "all_auto",
+    key = "css-braces", -- unique id
 })
 
--- ls.add_snippets("all", {
---     s("autotrigger", {
---         t("autosnippet"),
---     }),
--- }, {
---     type = "autosnippets",
---     key = "all_auto",
--- })
+ls.add_snippets("all", {
+    s("{}", {
+        t("{"),
+        i(1),
+        t("}"),
+        i(2)
+    }),
+}, {
+    type = "autosnippets",
+})
 
-ls.add_snippets('typescriptreact', {
+ls.add_snippets("all", {
+    s("[]", {
+        t("["),
+        i(1),
+        t("]"),
+        i(2)
+    }),
+}, {
+    type = "autosnippets",
+})
+
+ls.add_snippets("all", {
+    s("''", {
+        t("'"),
+        i(1),
+        t("'"),
+        i(2)
+    }),
+}, {
+    type = "autosnippets",
+})
+
+ls.add_snippets("all", {
+    s('""', {
+        t('"'),
+        i(1),
+        t('"'),
+        i(2)
+    }),
+}, {
+    type = "autosnippets",
+})
+
+ls.add_snippets("all", {
+    s('``', {
+        t('`'),
+        i(1),
+        t('`'),
+        i(2)
+    }),
+}, {
+    type = "autosnippets",
+})
+
+function GetFileName()
+    local fileName = vim.fn.substitute(vim.fn.expand('%:t'), '\\(.*\\)\\..*$', '\\1', '')
+    vim.cmd('normal kj')
+    return (fileName:gsub("[%-_](%w)", function(c)
+        return c:upper()
+    end):gsub("^%l", string.upper))
+end
+
+ls.add_snippets('all', {
     s('rfun', {
         t("export default function "),
-        i(1, 'Compo'),
+        f(GetFileName),
         t({ "() {", "    return (", "        <>", "" }),
-        i(2, "            "),
+        t("            <h1>Hello "),
+        i(1),
+        f(GetFileName),
+        t("</h1>"),
         t({ "", "        </>", "    )", "}" })
     })
 })
+
 
 ls.add_snippets('typescriptreact', {
     s('af', {
@@ -126,35 +169,6 @@ ls.add_snippets('typescriptreact', {
     })
 })
 
-ls.add_snippets('typescriptreact', {
-    s('us', {
-        t("const ["),
-        i(1),
-        t(", "),
-        i(2),
-        t("] = useState("),
-        i(3),
-        t(")"),
-    })
-})
-
-ls.add_snippets('typescriptreact', {
-    s('ue', {
-        t({ "useEffect(() => {", "" }),
-        i(1),
-        t({ "", "}, [])" }),
-    })
-})
-
--- ls.add_snippets("all", {
---     s("autotrigger", {
---         t("autosnippet"),
---     }),
--- }, {
---     type = "autosnippets",
---     key = "all_auto",
--- })
---
 -- require("luasnip.loaders.from_vscode").load({ paths = { "./my-snippets" } }) -- Load snippets from my-snippets folder
 --
 -- require("luasnip.loaders.from_snipmate").load({ path = { "./my-snippets" } })
