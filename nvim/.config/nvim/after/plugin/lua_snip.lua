@@ -89,6 +89,17 @@ ls.add_snippets("all", {
 })
 
 ls.add_snippets("all", {
+    s("()", {
+        t("("),
+        i(1),
+        t(")"),
+        i(2)
+    }),
+}, {
+    type = "autosnippets",
+})
+
+ls.add_snippets("all", {
     s("''", {
         t("'"),
         i(1),
@@ -129,7 +140,7 @@ function GetFileName()
     end):gsub("^%l", string.upper))
 end
 
-ls.add_snippets('all', {
+ls.add_snippets('typescriptreact', {
     s('rfun', {
         t("export default function "),
         f(GetFileName),
