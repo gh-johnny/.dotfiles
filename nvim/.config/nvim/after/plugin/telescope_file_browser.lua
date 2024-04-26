@@ -69,7 +69,7 @@ local create = function(file, finder)
     if file then
         if check_file_extension(file.filename) == 'tsx' then
             local declaration = "export default function " .. get_file_name(file.filename) .. "(){\n"
-            local return_html = "\t return (\n\t\t<>\n\t\t\t<h1>Hello " .. get_file_name(file.filename) .. "</h1>\n\t\t</>\n\t)\n}"
+            local return_html = "    return (\n\t\t<>\n\t\t\t<h1>Hello " .. get_file_name(file.filename) .. "</h1>\n\t\t</>\n\t)\n}"
             local textToAppend = declaration .. return_html
             file:write(textToAppend, "a")
             file:close()
