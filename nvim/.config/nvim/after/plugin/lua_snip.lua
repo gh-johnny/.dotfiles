@@ -57,7 +57,7 @@ ls.setup({
 
 ls.add_snippets('css', {
     s("{", {
-        t({ "{", "    " }),
+        t({ "", "{", "    " }),
         i(1),
         t({ "", "}" })
     }),
@@ -88,49 +88,6 @@ ls.add_snippets("all", {
     type = "autosnippets",
 })
 
-ls.add_snippets("all", {
-    s("()", {
-        t("("),
-        i(1),
-        t(")"),
-        i(2)
-    }),
-}, {
-    type = "autosnippets",
-})
-
-ls.add_snippets("all", {
-    s("''", {
-        t("'"),
-        i(1),
-        t("'"),
-        i(2)
-    }),
-}, {
-    type = "autosnippets",
-})
-
-ls.add_snippets("all", {
-    s('""', {
-        t('"'),
-        i(1),
-        t('"'),
-        i(2)
-    }),
-}, {
-    type = "autosnippets",
-})
-
-ls.add_snippets("all", {
-    s('``', {
-        t('`'),
-        i(1),
-        t('`'),
-        i(2)
-    }),
-}, {
-    type = "autosnippets",
-})
 
 function GetFileName()
     local fileName = vim.fn.substitute(vim.fn.expand('%:t'), '\\(.*\\)\\..*$', '\\1', '')
@@ -150,33 +107,6 @@ ls.add_snippets('typescriptreact', {
         f(GetFileName),
         t("</h1>"),
         t({ "", "        </>", "    )", "}" })
-    })
-})
-
-
-ls.add_snippets('typescriptreact', {
-    s('af', {
-        t("const "),
-        i(1),
-        t(" = () => {"),
-        t({ "", "}" })
-    })
-})
-
-
-ls.add_snippets('typescript', {
-    s('c', {
-        t('console.log('),
-        i(1),
-        t(')')
-    })
-})
-
-ls.add_snippets('typescriptreact', {
-    s('c', {
-        t('console.log('),
-        i(1),
-        t(')')
     })
 })
 

@@ -1,12 +1,6 @@
 -- Leader
 vim.g.mapleader = " "
 
--- vim.keymap.set("n", "<leader>b", function ()
---     vim.cmd("redir @a | echo substitute(expand('%:t'), '\\(.*\\)\\..*$', '\\1', '') | redir END")
---     vim.cmd(':normal "ap')
---     vim.cmd(':normal J')
--- end)
-
 -- Exit file (default netrw)
 vim.keymap.set("n", "<leader>q", vim.cmd.Ex)
 
