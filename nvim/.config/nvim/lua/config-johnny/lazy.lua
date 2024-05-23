@@ -1,11 +1,11 @@
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
 if not vim.loop.fs_stat(lazypath) then
     vim.fn.system({
-        "git",
-        "clone",
-        "--filter=blob:none",
-        "https://github.com/folke/lazy.nvim.git",
-        "--branch=stable", -- latest stable release
+        'git',
+        'clone',
+        '--filter=blob:none',
+        'https://github.com/folke/lazy.nvim.git',
+        '--branch=stable', -- latest stable release
         lazypath,
     })
 end
@@ -14,15 +14,18 @@ vim.opt.rtp:prepend(lazypath)
 local plugins = {
 
     -- Color scheme
-    { "catppuccin/nvim",           name = "catppuccin" },
+    {
+        'catppuccin/nvim',
+        name = 'catppuccin'
+    },
 
     -- Transparency
-    { "xiyaowong/transparent.nvim" },
+    { 'xiyaowong/transparent.nvim' },
 
     -- Treesiter
     {
         'nvim-treesitter/nvim-treesitter',
-        build = ":TSUpdate"
+        build = ':TSUpdate'
     },
 
     -- Telescope
@@ -35,14 +38,15 @@ local plugins = {
 
     -- Telescope file browser
     {
-        "nvim-telescope/telescope-file-browser.nvim",
-        dependencies = { "nvim-telescope/telescope.nvim", "nvim-lua/plenary.nvim" }
+        'nvim-telescope/telescope-file-browser.nvim',
+        dependencies = { 'nvim-telescope/telescope.nvim', 'nvim-lua/plenary.nvim' }
     },
+
     -- Harpoon
-    "ThePrimeagen/harpoon",
+    'ThePrimeagen/harpoon',
 
     -- Undotree
-    "mbbill/undotree",
+    'mbbill/undotree',
 
     -- LSP
     {
@@ -65,10 +69,19 @@ local plugins = {
         }
     },
 
+    -- DAP
+    {
+        {
+            'rcarriga/nvim-dap-ui',
+            dependencies = { 'mfussenegger/nvim-dap', 'nvim-neotest/nvim-nio' },
+        },
+        { 'theHamsta/nvim-dap-virtual-text' },
+    },
+
     -- Status bar
     {
         'nvim-lualine/lualine.nvim',
-        requires = { 'nvim-tree/nvim-web-devicons', opt = true }
+        dependencies = { 'nvim-tree/nvim-web-devicons', opt = true }
     },
 
     -- Comments
@@ -78,9 +91,9 @@ local plugins = {
     {
         'L3MON4D3/LuaSnip',
         -- follow latest release.
-        version = "2.0.0", -- Replace <CurrentMajor> by the latest released major (first number of latest release)
+        version = '2.0.0', -- Replace <CurrentMajor> by the latest released major (first number of latest release)
         -- install jsregexp (optional!).
-        build = "make install_jsregexp"
+        build = 'make install_jsregexp'
     }, -- Required
 
     -- Vim fugitive
@@ -91,10 +104,10 @@ local plugins = {
 
     -- Markdow visualizer
     {
-        "iamcco/markdown-preview.nvim",
-        cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
-        ft = { "markdown" },
-        build = function() vim.fn["mkdp#util#install"]() end,
+        'iamcco/markdown-preview.nvim',
+        cmd = { 'MarkdownPreviewToggle', 'MarkdownPreview', 'MarkdownPreviewStop' },
+        ft = { 'markdown' },
+        build = function() vim.fn['mkdp#util#install']() end,
     },
 
     -- Autotag for frontend sh*t, pls end my suffering
@@ -106,11 +119,8 @@ local plugins = {
     {
         'nvim-tree/nvim-web-devicons'
     },
-
 }
 
 
-
 local opts = {}
-
-require("lazy").setup(plugins, opts)
+require('lazy').setup(plugins, opts)
