@@ -82,6 +82,8 @@ alias planner='~/.dotfiles/local/.local/bin/projectstart && exit'
 alias tmux='tmux -2'
 alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
 
+alias dotnet-ef="~/.dotnet/tools/dotnet-ef"
+
 # Set to vi mode in cli
 set -o vi
 
