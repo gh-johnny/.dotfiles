@@ -83,6 +83,7 @@ alias tmux='tmux -2'
 alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
 
 alias dotnet-ef="~/.dotnet/tools/dotnet-ef"
+alias pgadmin='cd && cd pgadmin4/ && source bin/activate && pgadmin4'
 
 # Set to vi mode in cli
 set -o vi
