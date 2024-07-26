@@ -99,6 +99,13 @@ local plugins = {
     -- Vim fugitive
     'tpope/vim-fugitive',
 
+    -- Vim dadbod (sql)
+    {
+        'tpope/vim-dadbod',
+        'kristijanhusak/vim-dadbod-completion',
+        'kristijanhusak/vim-dadbod-ui',
+    },
+
     -- Git signs
     'lewis6991/gitsigns.nvim',
 
