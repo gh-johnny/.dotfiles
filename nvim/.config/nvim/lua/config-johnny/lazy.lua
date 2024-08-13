@@ -126,6 +126,10 @@ local plugins = {
     {
         'nvim-tree/nvim-web-devicons'
     },
+
+    -- Nvim spectre (find and replace plugin)
+    'nvim-pack/nvim-spectre',
+
 }
 
 

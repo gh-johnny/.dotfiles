@@ -1,19 +1,12 @@
 -- Leader
 vim.g.mapleader = " "
 
-
 -- Go to searched word in current line
 -- vim.keymap.set('n', '<leader>s','V/\\%V')
-
 vim.api.nvim_set_keymap('n', '<leader>s', ':s-', { noremap = true, silent = false })
 
 -- Exit file (default netrw)
 vim.keymap.set("n", "<leader>q", vim.cmd.Ex)
-
--- Save
-vim.keymap.set("n", "<leader>w", function()
-    vim.cmd('wa')
-end)
 
 -- Format
 vim.keymap.set("n", "<leader>fo", function()
