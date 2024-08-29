@@ -130,6 +130,9 @@ local plugins = {
     -- Nvim spectre (find and replace plugin)
     'nvim-pack/nvim-spectre',
 
+    -- Angular goto shit
+    'joeveiga/ng.nvim',
+
 }
 
 
