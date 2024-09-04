@@ -77,12 +77,13 @@ alias screenadd=~/.dotfiles/local/.local/bin/screenadd
 alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
 # alias cat="bat"
 alias dot="cd ~/.dotfiles"
-alias server='xdotool key --clearmodifiers Super+t && exit'
+alias server='wezterm start -- bash -c "~/.dotfiles/local/.local/bin/server-connect ; exec bash" & disown && exit'
 alias planner='~/.dotfiles/local/.local/bin/projectstart && exit' 
 alias tmux='tmux -2'
 alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
 
 alias dotnet-ef="~/.dotnet/tools/dotnet-ef"
+alias dotnet-remigrate="rm -rf Migrations/ && dotnet-ef migrations add NewMigration && dotnet-ef database update"
 alias pgadmin='cd && cd pgadmin4/ && source bin/activate && pgadmin4'
 
 # Set to vi mode in cli
