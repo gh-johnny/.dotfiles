@@ -133,6 +133,14 @@ local plugins = {
     -- Angular goto shit
     'joeveiga/ng.nvim',
 
+    -- Live server (pls end me)
+    {
+        'barrett-ruth/live-server.nvim',
+        build = 'pnpm add -g live-server',
+        cmd = { 'LiveServerStart', 'LiveServerStop' },
+        config = true
+    },
+
 }
 
 
