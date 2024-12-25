@@ -54,6 +54,7 @@ export MOZILLA_HOME=~/.config/.mozilla
 
 
 # Aliases
+alias cadesenha="echo 'ta no seu cu'"
 alias src="source ~/.zshrc"
 alias nv="nvim"
 alias v="nvim ."
@@ -77,17 +78,22 @@ alias screenadd=~/.dotfiles/local/.local/bin/screenadd
 alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
 # alias cat="bat"
 alias dot="cd ~/.dotfiles"
-alias server='xdotool key --clearmodifiers Super+t && exit'
+alias server='wezterm start -- bash -c "~/.dotfiles/local/.local/bin/server-connect ; exec bash" & disown && exit'
 alias planner='~/.dotfiles/local/.local/bin/projectstart && exit' 
 alias tmux='tmux -2'
 alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
 
 alias dotnet-ef="~/.dotnet/tools/dotnet-ef"
+alias dotnet-remigrate="rm -rf Migrations/ && dotnet clean && dotnet-ef migrations add NewMigration && dotnet-ef database update"
 alias pgadmin='cd && cd pgadmin4/ && source bin/activate && pgadmin4'
+alias nautilus="GTK_THEME=Adwaita:dark nautilus"
 
 # Set to vi mode in cli
 set -o vi
 
+# nvm
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 
 # pnpm
 export PNPM_HOME="/home/johnny/.local/share/pnpm"
@@ -103,3 +109,5 @@ esac
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+. "/home/johnny/.deno/env"

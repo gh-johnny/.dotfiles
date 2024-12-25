@@ -130,6 +130,17 @@ local plugins = {
     -- Nvim spectre (find and replace plugin)
     'nvim-pack/nvim-spectre',
 
+    -- Angular goto shit
+    'joeveiga/ng.nvim',
+
+    -- Live server (pls end me)
+    {
+        'barrett-ruth/live-server.nvim',
+        build = 'pnpm add -g live-server',
+        cmd = { 'LiveServerStart', 'LiveServerStop' },
+        config = true
+    },
+
 }
 
 
