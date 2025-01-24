@@ -85,7 +85,7 @@ alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
 
 alias dotnet-ef="~/.dotnet/tools/dotnet-ef"
 alias dotnet-remigrate="rm -rf Migrations/ && dotnet clean && dotnet-ef migrations add NewMigration && dotnet-ef database update"
-alias pgadmin='cd && cd pgadmin4/ && source bin/activate && pgadmin4'
+alias pgadmin='cd ~/pgadmin4/ && source bin/activate && pgadmin4'
 alias nautilus="GTK_THEME=Adwaita:dark nautilus"
 
 # Set to vi mode in cli

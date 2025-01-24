@@ -1,4 +1,3 @@
-
 [colors]
 draw_bold_text_with_bright_colors = true
 
@@ -56,11 +55,10 @@ multiplier = 3
 
 [window]
 class = "Alacritty"
-# general = "Alacritty"
 opacity = 0.8
 
 [window.padding]
-x = 10
+x = 5
 y = 5
 
 [general]

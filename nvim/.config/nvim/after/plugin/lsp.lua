@@ -4,7 +4,7 @@ lsp.preset("recommended")
 
 lsp.ensure_installed({
     'lua_ls',
-    'cssls',
+    'csharp_ls',
 })
 
 local cmp = require("cmp")
