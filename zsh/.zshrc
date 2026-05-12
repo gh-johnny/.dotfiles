@@ -5,17 +5,54 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# Created by newuser for 5.9
+# Lines configured by zsh-newuser-install
+HISTFILE=~/.zshhistfile
+HISTSIZE=3000
+SAVEHIST=5000
+unsetopt beep
+bindkey -v
+# End of lines configured by zsh-newuser-install
+# The following lines were added by compinstall
+zstyle :compinstall filename '/home/jo/.zshrc'
 
-source /usr/share/zsh-theme-powerlevel10k/powerlevel10k.zsh-theme
+alias ll="ls -l"
+alias lla="ls -a"
+alias llla="ls -la"
+
+alias ..="cd .."
+alias ...="cd ../../"
+alias ....="cd ../../../"
+alias .....="cd ../../../../"
+
+alias v="nvim ."
+
+alias src="source ~/.zshrc"
+
+alias grep="grep --color=always"
+
+# claude-profiles
+alias claude-p-basic="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/basic claude --dangerously-skip-permissions"
+alias claude="claude-p-basic"
+alias claude-p-uni="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/uni claude --dangerously-skip-permissions"
+alias claude-p-beo="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/beo claude --dangerously-skip-permissions"
+alias claude-p-care="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/care claude --dangerously-skip-permissions"
+alias claude-p-obsessia="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/obsessia claude --dangerously-skip-permissions"
+
+
+export TERMINAL=alacritty
+
+PS1='%n@%m:%${(#):-%~}%# '
+
+autoload -Uz compinit
+compinit
+# End of lines added by compinstall
+source ~/powerlevel10k/powerlevel10k.zsh-theme
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-PS1='%n@%m:%${(#):-%~}%# '
+export TERMINAL=alacritty
 
-# ex - arquive extractor
-# ex <file>
 ex()
 {
     if [ -f $1 ] ; then
@@ -39,75 +76,28 @@ ex()
     fi
 }
 
-
-# Environmental variables
-export EDITOR="nvim"
-export TERMINAL="alacritty"
-export BROWSER="firefox"
-export CRON=~/.dotfiles/cron/.config/.cron/mycron
-export LESSHISTFILE=
-# export LOGS="~./dotfiles/logs"
-export XDG_PICTURES_DIR="~/Media/Pictures/"
-export XDG_VIDEOS_DIR="~/Media/Videos/"
-export XDG_MUSIC_DIR="~/Media/Music/"
-export MOZILLA_HOME=~/.config/.mozilla
-
-
-# Aliases
-alias cadesenha="echo 'ta no seu cu'"
-alias src="source ~/.zshrc"
-alias nv="nvim"
-alias v="nvim ."
-alias git-flow="git log --all --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit" 
-alias kill="kill -9"
-alias ls="ls -m --color=auto"
-alias ll="ls -l"
-alias la="ls -a"
-alias grep="grep --color=always"
-alias mv="mv -i"
-alias ssh="TERM=xterm-256color $(which ssh)"
-alias ..="cd .."
-alias ...="cd ../.."
-alias ....="cd ../../.."
-alias .....="cd ../../../.."
-alias screenshot="flameshot"
-alias brightness=~/.dotfiles/local/.local/bin/changebrightness
-alias blh=~/.dotfiles/local/.local/bin/bluetoothheadphones
-alias wifimenu=~/.dotfiles/local/.local/bin/wifimenu
-alias screenadd=~/.dotfiles/local/.local/bin/screenadd
-alias changekeyboardlayout=~/.dotfiles/local/.local/bin/changekeyboardlayout
-# alias cat="bat"
-alias dot="cd ~/.dotfiles"
-alias server='wezterm start -- bash -c "~/.dotfiles/local/.local/bin/server-connect ; exec bash" & disown && exit'
-alias planner='~/.dotfiles/local/.local/bin/projectstart && exit' 
-alias tmux='tmux -2'
-alias powermenu="~/.dotfiles/local/.local/bin/powermenu"
-
-alias dotnet-ef="~/.dotnet/tools/dotnet-ef"
-alias dotnet-remigrate="rm -rf Migrations/ && dotnet clean && dotnet-ef migrations add NewMigration && dotnet-ef database update"
-alias pgadmin='cd ~/pgadmin4/ && source bin/activate && pgadmin4'
-alias nautilus="GTK_THEME=Adwaita:dark nautilus"
-
-# Set to vi mode in cli
-set -o vi
-
-# nvm
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-
 # pnpm
-export PNPM_HOME="/home/johnny/.local/share/pnpm"
+export PNPM_HOME="/home/jo/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
 esac
 # pnpm end
+export PATH="$HOME/.local/bin:$PATH"
+
+export ANDROID_HOME=$HOME/Android/Sdk
+unset ANDROID_SDK_ROOT  # /etc/profile.d sets this to /opt/android-sdk; ANDROID_HOME takes precedence
+
+export PATH=$PATH:$ANDROID_HOME/platform-tools
 
 # bun completions
-[ -s "/home/johnny/.bun/_bun" ] && source "/home/johnny/.bun/_bun"
+[ -s "/home/jo/.bun/_bun" ] && source "/home/jo/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-. "/home/johnny/.deno/env"
+
+. "$HOME/.local/share/../bin/env"
+
+alias claude-mem='/home/jo/.bun/bin/bun "/home/jo/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs"'
+
