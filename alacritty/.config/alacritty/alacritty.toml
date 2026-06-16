@@ -1,65 +1,22 @@
-[colors]
-draw_bold_text_with_bright_colors = true
+general.import = [ "~/.config/omarchy/current/theme/alacritty.toml" ]
 
-[colors.bright]
-black = "#24273a"
-blue = "#8bd5ca"
-green = "#89d171"
-# pink = "#f7a6e1"
-# purple = "#b788f2"
-red = "#ee99a0"
-white = "#ff00ff"
-yellow = "#f5a97f"
-
-[colors.normal]
-black = "#181926"
-blue = "#8aadf4"
-green = "#a6da95"
-# pink = "#f5bde6"
-# purple = "#b487ed"
-red = "#ed8796"
-white = "#cad3f5"
-yellow = "#eed49f"
-
-[colors.primary]
-background = "#1e2030"
-foreground = "#cad3f5"
+[env]
+TERM = "xterm-256color"
 
 [font]
-size = 11
-
-[font.bold]
-family = "Roboto Mono Nerd Font"
-style = "Bold"
-
-[font.bold_italic]
-family = "Roboto Mono Nerd Font"
-style = "Bold Italic"
-
-[font.italic]
-family = "Roboto Mono Nerd Font"
-style = "Italic"
-
-[font.normal]
-family = "Roboto Mono Nerd Font"
-style = "Medium"
-
-[[keyboard.bindings]]
-action = "SpawnNewInstance"
-key = "Return"
-mods = "Super|Shift"
-
-[scrolling]
-history = 10000
-multiplier = 3
+normal = { family = "Roboto Mono Nerd Font", style = "Regular" }
+bold = { family = "Roboto Mono Nerd Font", style = "Bold" }
+italic = { family = "Roboto Mono Nerd Font", style = "Italic" }
+size = 12
 
 [window]
-class = "Alacritty"
-opacity = 0.8
+padding.x = 14
+padding.y = 14
+decorations = "None"
+opacity = 0.6
 
-[window.padding]
-x = 5
-y = 5
-
-[general]
-live_config_reload = true
+[keyboard]
+bindings = [
+{ key = "Insert", mods = "Shift", action = "Paste" },
+{ key = "Insert", mods = "Control", action = "Copy" }
+]

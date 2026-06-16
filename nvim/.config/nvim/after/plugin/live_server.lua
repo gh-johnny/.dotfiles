@@ -1,1 +1,1 @@
-require('live-server').setup()
+vim.g.live_server = {}
