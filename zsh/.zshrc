@@ -16,8 +16,8 @@ bindkey -v
 zstyle :compinstall filename '/home/jo/.zshrc'
 
 alias ll="ls -l"
-alias lla="ls -a"
-alias llla="ls -la"
+alias la="ls -a"
+alias lla="ls -la"
 
 alias docker-c-clean="docker stop $(docker ps -aq) && docker rm $(docker ps -aq)"
 
@@ -35,17 +35,15 @@ alias grep="grep --color=always"
 alias ssh-session='eval "$(ssh-agent -s)" && ssh-add $HOME/.ssh/gh'
 
 # claude-profiles
-alias claude-profiles="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/claude-profiles claude --dangerously-skip-permissions"
-alias claude-base="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/base claude --dangerously-skip-permissions"
-alias claude-uni="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/uni claude --dangerously-skip-permissions"
-alias claude-beo="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo claude --dangerously-skip-permissions"
-alias claude-care="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care claude --dangerously-skip-permissions"
-alias claude-obsessia="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/obsessia claude --dangerously-skip-permissions"
-alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo-dashboard claude --dangerously-skip-permissions"
-alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo-mobile claude --dangerously-skip-permissions"
-alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care-backend claude --dangerously-skip-permissions"
-alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care-frontend claude --dangerously-skip-permissions"
-alias claude-linux="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/claude-linux claude --dangerously-skip-permissions"
+alias claude-ai-profiles="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/ai-profiles/claude claude --dangerously-skip-permissions"
+alias claude-base="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/base/claude claude --dangerously-skip-permissions"
+alias claude-linux="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/linux/claude claude --dangerously-skip-permissions"
+alias claude-uni="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/uni/claude claude --dangerously-skip-permissions"
+alias claude-obsessia="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/obsessia/claude claude --dangerously-skip-permissions"
+alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo/profile-dashboard/claude claude --dangerously-skip-permissions"
+alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo/profile-mobile/claude claude --dangerously-skip-permissions"
+alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care/profile-backend/claude claude --dangerously-skip-permissions"
+alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care/profile-frontend/claude claude --dangerously-skip-permissions"
 
 
 export TERMINAL=alacritty
