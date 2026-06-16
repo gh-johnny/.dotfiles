@@ -27,6 +27,7 @@ dotfiles/
 ├── autostart/    → ~/.config/autostart/
 ├── btop/         → ~/.config/btop/
 ├── fastfetch/    → ~/.config/fastfetch/
+├── git/          → ~/.config/git/
 ├── ghostty/      → ~/.config/ghostty/
 ├── hypr/         → ~/.config/hypr/
 ├── kitty/        → ~/.config/kitty/
