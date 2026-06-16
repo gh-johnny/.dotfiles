@@ -12,6 +12,7 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `autostart` | `~/.config/autostart/` |
 | `btop` | `~/.config/btop/` |
 | `fastfetch` | `~/.config/fastfetch/` |
+| `git` | `~/.config/git/` |
 | `ghostty` | `~/.config/ghostty/` |
 | `hypr` | `~/.config/hypr/` |
 | `kitty` | `~/.config/kitty/` |
@@ -26,14 +27,16 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 
 `archive/` holds old X11/i3 packages — not stowed, kept for reference.
 
+**This table must always reflect reality.** When a package is added, removed, or its target changes, update it immediately — re-mapping is always correct and expected.
+
 ## Stow commands
 
 ```bash
 # Stow a single package
 stow --dir=~/projects/dotfiles --target=$HOME <package>
 
-# Stow everything at once
-stow --dir=~/projects/dotfiles --target=$HOME */
+# Stow everything at once (archive/ is excluded — it holds legacy X11/i3 configs)
+stow --dir=~/projects/dotfiles --target=$HOME --ignore='^archive$' */
 
 # Unstow
 stow --dir=~/projects/dotfiles --target=$HOME -D <package>
@@ -50,6 +53,7 @@ stow --dir=~/projects/dotfiles --target=$HOME -D <package>
 ## Key rules
 
 - **Dotfiles is source of truth.** Never edit config files directly on the machine unless you immediately commit the change here too. Since every file is a symlink into this repo, editing via any editor already edits the repo.
+- **README.md and setup.sh must always reflect reality.** When a package is added/removed, a tool changes, or the setup process shifts, update both files immediately — they are living documents, not snapshots.
 - `mako` is managed by omarchy (`~/.config/omarchy/`). Do not stow it.
 - `nvim` has no standalone git repo anymore — this is the only copy.
 - `btop/themes/current.theme` is a symlink to omarchy's theme — that is intentional.
