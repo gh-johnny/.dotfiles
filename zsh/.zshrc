@@ -34,16 +34,16 @@ alias grep="grep --color=always"
 
 alias ssh-session='eval "$(ssh-agent -s)" && ssh-add $HOME/.ssh/gh'
 
-# claude-profiles
-alias claude-ai-profiles="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/ai-profiles/claude claude --dangerously-skip-permissions"
-alias claude-base="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/base/claude claude --dangerously-skip-permissions"
-alias claude-linux="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/linux/claude claude --dangerously-skip-permissions"
-alias claude-uni="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/uni/claude claude --dangerously-skip-permissions"
-alias claude-obsessia="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/obsessia/claude claude --dangerously-skip-permissions"
-alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo/profile-dashboard/claude claude --dangerously-skip-permissions"
-alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo/profile-mobile/claude claude --dangerously-skip-permissions"
-alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care/profile-backend/claude claude --dangerously-skip-permissions"
-alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care/profile-frontend/claude claude --dangerously-skip-permissions"
+# ai-profiles
+alias claude-ai-profiles="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/ai-profiles/claude claude --dangerously-skip-permissions"
+alias claude-base="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/base/claude claude --dangerously-skip-permissions"
+alias claude-linux="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/linux/claude claude --dangerously-skip-permissions"
+alias claude-uni="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/uni/claude claude --dangerously-skip-permissions"
+alias claude-obsessia="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/obsessia/claude claude --dangerously-skip-permissions"
+alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/beo/profile-dashboard/claude claude --dangerously-skip-permissions"
+alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/beo/profile-mobile/claude claude --dangerously-skip-permissions"
+alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-backend/claude claude --dangerously-skip-permissions"
+alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-frontend/claude claude --dangerously-skip-permissions"
 
 
 export TERMINAL=alacritty
