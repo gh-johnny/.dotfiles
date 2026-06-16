@@ -45,6 +45,7 @@ alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profile
 alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo-mobile claude --dangerously-skip-permissions"
 alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care-backend claude --dangerously-skip-permissions"
 alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care-frontend claude --dangerously-skip-permissions"
+alias claude-linux="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/claude-linux claude --dangerously-skip-permissions"
 
 
 export TERMINAL=alacritty
