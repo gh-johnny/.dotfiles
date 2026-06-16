@@ -19,6 +19,8 @@ alias ll="ls -l"
 alias lla="ls -a"
 alias llla="ls -la"
 
+alias docker-c-clean="docker stop $(docker ps -aq) && docker rm $(docker ps -aq)"
+
 alias ..="cd .."
 alias ...="cd ../../"
 alias ....="cd ../../../"
@@ -30,13 +32,19 @@ alias src="source ~/.zshrc"
 
 alias grep="grep --color=always"
 
+alias ssh-session='eval "$(ssh-agent -s)" && ssh-add $HOME/.ssh/gh'
+
 # claude-profiles
-alias claude-p-basic="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/basic claude --dangerously-skip-permissions"
-alias claude="claude-p-basic"
-alias claude-p-uni="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/uni claude --dangerously-skip-permissions"
-alias claude-p-beo="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/beo claude --dangerously-skip-permissions"
-alias claude-p-care="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/care claude --dangerously-skip-permissions"
-alias claude-p-obsessia="CLAUDE_CONFIG_DIR=~/.config/claude-profiles/obsessia claude --dangerously-skip-permissions"
+alias claude-profiles="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/claude-profiles claude --dangerously-skip-permissions"
+alias claude-base="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/base claude --dangerously-skip-permissions"
+alias claude-uni="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/uni claude --dangerously-skip-permissions"
+alias claude-beo="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo claude --dangerously-skip-permissions"
+alias claude-care="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care claude --dangerously-skip-permissions"
+alias claude-obsessia="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/obsessia claude --dangerously-skip-permissions"
+alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo-dashboard claude --dangerously-skip-permissions"
+alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/beo-mobile claude --dangerously-skip-permissions"
+alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care-backend claude --dangerously-skip-permissions"
+alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/claude-profiles/profiles/care-frontend claude --dangerously-skip-permissions"
 
 
 export TERMINAL=alacritty
@@ -76,6 +84,28 @@ ex()
     fi
 }
 
+# Java version management
+export JAVA_17_HOME="/usr/lib/jvm/java-17-openjdk"
+export JAVA_21_HOME="/usr/lib/jvm/java-21-openjdk"
+export JAVA_25_HOME="/usr/lib/jvm/java-25-openjdk"
+
+# Set default Java (17 currently set as system default)
+export JAVA_HOME="$JAVA_17_HOME"
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Switch Java version in current shell
+java17() { export JAVA_HOME="$JAVA_17_HOME" && export PATH="$JAVA_HOME/bin:${PATH//*jvm\/java-*\/bin:/}" && java -version; }
+java21() { export JAVA_HOME="$JAVA_21_HOME" && export PATH="$JAVA_HOME/bin:${PATH//*jvm\/java-*\/bin:/}" && java -version; }
+java25() { export JAVA_HOME="$JAVA_25_HOME" && export PATH="$JAVA_HOME/bin:${PATH//*jvm\/java-*\/bin:/}" && java -version; }
+
+# Short aliases
+alias j17='java17'
+alias j21='java21'
+alias j25='java25'
+
+# Show current Java version and home
+alias jv='echo "JAVA_HOME: $JAVA_HOME" && java -version'
+
 # pnpm
 export PNPM_HOME="/home/jo/.local/share/pnpm"
 case ":$PATH:" in
@@ -101,3 +131,4 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 
 alias claude-mem='/home/jo/.bun/bin/bun "/home/jo/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs"'
 
+eval $(DISPLAY="" WAYLAND_DISPLAY="" SSH_ASKPASS="" keychain --eval --quiet --nogui ~/.ssh/gh)
