@@ -44,24 +44,41 @@ dotfiles/
 
 ## Fresh machine setup
 
+Run the guided setup script — it handles everything in order:
+
 ```bash
-# 1. Install dependencies
-sudo pacman -S stow zsh neovim alacritty tmux keychain
-
-# 2. Clone the repo
-git clone git@github.com:gh-johnny/dotfiles.git ~/projects/dotfiles
-
-# 3. Stow all packages
-stow --dir=~/projects/dotfiles --target=$HOME */
-
-# 4. Set zsh as default shell
-chsh -s /usr/bin/zsh
-
-# 5. Install Powerlevel10k
-yay -S zsh-theme-powerlevel10k-git
+bash ~/projects/dotfiles/setup.sh
 ```
 
-> **Note:** `mako` is not a stow package — its config is managed by omarchy. Install omarchy separately.
+Or manually, step by step:
+
+```bash
+# 1. Install yay (AUR helper)
+sudo pacman -S --needed base-devel git
+git clone https://aur.archlinux.org/yay-git.git /tmp/yay-git && (cd /tmp/yay-git && makepkg -si)
+
+# 2. Clone the repo
+git clone git@github.com:gh-johnny/.dotfiles.git ~/projects/dotfiles
+
+# 3. Install stow and link all packages (archive/ excluded — legacy X11/i3 configs)
+sudo pacman -S stow
+stow --dir=~/projects/dotfiles --target=$HOME --ignore='^archive$' */
+
+# 4. Set zsh as default shell + install Powerlevel10k
+sudo pacman -S zsh keychain
+chsh -s /usr/bin/zsh
+git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ~/powerlevel10k
+
+# 5. Install Omarchy (Hyprland/Wayland experience)
+git clone https://github.com/basecamp/omarchy.git ~/.local/share/omarchy
+bash ~/.local/share/omarchy/install.sh
+
+# 6. Clone TPM for tmux plugins
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+# Then inside tmux: <prefix> + I to install plugins
+```
+
+> See `setup.sh` for the full staged install including terminals, fonts, dev tools, and apps. `mako` is managed by omarchy — do not stow it.
 
 ## Day-to-day workflow
 

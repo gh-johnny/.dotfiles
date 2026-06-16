@@ -35,8 +35,8 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 # Stow a single package
 stow --dir=~/projects/dotfiles --target=$HOME <package>
 
-# Stow everything at once
-stow --dir=~/projects/dotfiles --target=$HOME */
+# Stow everything at once (archive/ is excluded — it holds legacy X11/i3 configs)
+stow --dir=~/projects/dotfiles --target=$HOME --ignore='^archive$' */
 
 # Unstow
 stow --dir=~/projects/dotfiles --target=$HOME -D <package>
