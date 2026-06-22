@@ -44,6 +44,7 @@ alias claude-beo-dashboard="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/be
 alias claude-beo-mobile="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/beo/profile-mobile/claude claude --dangerously-skip-permissions"
 alias claude-care-backend="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-backend/claude claude --dangerously-skip-permissions"
 alias claude-care-frontend="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-frontend/claude claude --dangerously-skip-permissions"
+alias claude-care-fullstack="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-fullstack/claude claude --dangerously-skip-permissions"
 
 
 export TERMINAL=alacritty
@@ -131,4 +132,3 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 alias claude-mem='/home/jo/.bun/bin/bun "/home/jo/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs"'
 
 eval $(DISPLAY="" WAYLAND_DISPLAY="" SSH_ASKPASS="" keychain --eval --quiet --nogui ~/.ssh/gh)
-alias claude-care-fullstack="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-fullstack/claude claude --dangerously-skip-permissions"
