@@ -131,3 +131,4 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 alias claude-mem='/home/jo/.bun/bin/bun "/home/jo/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs"'
 
 eval $(DISPLAY="" WAYLAND_DISPLAY="" SSH_ASKPASS="" keychain --eval --quiet --nogui ~/.ssh/gh)
+alias claude-care-fullstack="CLAUDE_CONFIG_DIR=~/projects/ai-profiles/profiles/care/profile-fullstack/claude claude --dangerously-skip-permissions"
