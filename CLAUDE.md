@@ -17,6 +17,7 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `hypr` | `~/.config/hypr/` |
 | `kitty` | `~/.config/kitty/` |
 | `lazygit` | `~/.config/lazygit/` |
+| `mako` | `~/.config/mako/config` |
 | `nvim` | `~/.config/nvim/` |
 | `ssh` | `~/.ssh/config` |
 | `starship` | `~/.config/starship.toml` |
@@ -54,6 +55,6 @@ stow --dir=~/projects/dotfiles --target=$HOME -D <package>
 
 - **Dotfiles is source of truth.** Never edit config files directly on the machine unless you immediately commit the change here too. Since every file is a symlink into this repo, editing via any editor already edits the repo.
 - **README.md and setup.sh must always reflect reality.** When a package is added/removed, a tool changes, or the setup process shifts, update both files immediately — they are living documents, not snapshots.
-- `mako` is managed by omarchy (`~/.config/omarchy/`). Do not stow it.
+- `mako` is stowed from dotfiles. The config includes omarchy's theme via `include=~/.config/omarchy/current/theme/mako.ini`, so omarchy theming still applies — user overrides come after the include.
 - `nvim` has no standalone git repo anymore — this is the only copy.
 - `btop/themes/current.theme` is a symlink to omarchy's theme — that is intentional.
