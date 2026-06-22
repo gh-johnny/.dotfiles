@@ -1,0 +1,5 @@
+include=~/.config/omarchy/current/theme/mako.ini
+
+default-timeout=3000
+border-radius=8
+on-button-left=dismiss
