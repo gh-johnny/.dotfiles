@@ -47,6 +47,7 @@ export TERMINAL=alacritty
 
 PS1='%n@%m:%${(#):-%~}%# '
 
+fpath=(~/projects/ai-agents/scripts/completions $fpath)  # ai launcher completion
 autoload -Uz compinit
 compinit
 # End of lines added by compinstall
