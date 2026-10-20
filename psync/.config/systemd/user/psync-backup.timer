@@ -1,0 +1,11 @@
+[Unit]
+Description=psync: daily snapshot of ~/projects
+
+[Timer]
+# 04:30 in Brasília, while nobody is working
+OnCalendar=*-*-* 07:30:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

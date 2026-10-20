@@ -4,6 +4,7 @@
 #   psync status        peers, pending changes and conflicts (exit 1 if not in sync)
 #   psync wait [SECS]   block until every peer has everything (default timeout 600s)
 #   psync ready [SECS]  for launchers and logins: wait briefly until this host caught up, never fails
+#   psync backup [run|status|setup|restic ARGS...]   restic snapshots of ~/projects (opt-in per host)
 #   psync conflicts     list *.sync-conflict-* files
 #   psync pause         stop syncing on this host (survives reboots)
 #   psync resume        continue where it stopped
@@ -23,6 +24,13 @@ ST_HOME="${STHOMEDIR:-$HOME/.local/state/syncthing}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/psync"
 VERSIONS_MAX_AGE=$((30 * 86400))
 DISCONNECT_WARN_AFTER=3600
+# Backups live outside ~/projects (or they would be synced back), password included.
+BACKUP_REPO="${XDG_DATA_HOME:-$HOME/.local/share}/psync-backup/repo"
+BACKUP_PASSWORD="$STATE_DIR/backup-password"
+BACKUP_EXCLUDES="$HOME/.config/psync/backup-excludes"
+BACKUP_MIN_FREE_GB=30
+BACKUP_KEEP=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
+BACKUP_STALE_AFTER=$((36 * 3600))
 
 die() { echo "psync: $*" >&2; exit 1; }
 
@@ -187,7 +195,82 @@ cmd_ready() {
     [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] && continue
     echo "psync: $(api GET "config/devices/$id" | jq -r .name) is offline (last seen $(last_seen "$id")), so what it has not sent yet is not here" >&2
   done
+  backup_warning >&2
   return 0
+}
+
+# --- Backups. Sync is not a backup: a deletion or a bad overwrite travels to the other host.
+# restic keeps point-in-time history of ~/projects (deduplicated and compressed). Opt-in per
+# host: `psync backup setup` creates the repository and enables the daily timer; the VPS runs it.
+
+restic_repo() {
+  RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD_FILE=$BACKUP_PASSWORD restic "$@"
+}
+
+backup_have_repo() { [[ -e $BACKUP_REPO/config ]]; }
+
+# One line when this host makes backups and the last one failed or is overdue.
+backup_warning() {
+  local state=$STATE_DIR/backup-last status when
+  [[ -r $state ]] || return 0
+  read -r status when <"$state"
+  if [[ $status != ok ]]; then
+    echo "psync: the last backup FAILED ($(cut -d' ' -f3- "$state")), see: psync backup status"
+  elif (($(date +%s) - when > BACKUP_STALE_AFTER)); then
+    echo "psync: no successful backup for over $((BACKUP_STALE_AFTER / 3600))h, see: psync backup status"
+  fi
+}
+
+backup_setup() {
+  command -v restic >/dev/null || die "restic is not installed"
+  mkdir -p "$STATE_DIR" "$BACKUP_REPO"
+  if [[ ! -s $BACKUP_PASSWORD ]]; then
+    (umask 077 && openssl rand -base64 33 >"$BACKUP_PASSWORD")
+    echo "created $BACKUP_PASSWORD: keep a copy somewhere safe, without it the snapshots cannot be opened"
+  fi
+  backup_have_repo || restic_repo init
+  systemctl --user enable --now psync-backup.timer
+}
+
+backup_run() {
+  local free_gb rc=0
+  backup_have_repo || die "no backup repository on this host (run: psync backup setup)"
+  mkdir -p "$STATE_DIR"
+  free_gb=$(($(df --output=avail -k "$BACKUP_REPO" | tail -1) / 1048576))
+  if ((free_gb < BACKUP_MIN_FREE_GB)); then
+    echo "fail $(date +%s) only ${free_gb}GB free, needs ${BACKUP_MIN_FREE_GB}GB" >"$STATE_DIR/backup-last"
+    die "only ${free_gb}GB free (< ${BACKUP_MIN_FREE_GB}GB): not taking a snapshot"
+  fi
+  restic_repo backup "$FOLDER_PATH" --exclude-file "$BACKUP_EXCLUDES" --one-file-system --tag psync || rc=$?
+  # Exit 3: some files changed or vanished while being read. The snapshot exists.
+  ((rc != 3)) || rc=0
+  ((rc != 0)) || restic_repo forget "${BACKUP_KEEP[@]}" --prune --tag psync || rc=$?
+  if ((rc == 0)); then
+    echo "ok $(date +%s)" >"$STATE_DIR/backup-last"
+  else
+    echo "fail $(date +%s) restic exited with $rc" >"$STATE_DIR/backup-last"
+  fi
+  return $rc
+}
+
+backup_status() {
+  backup_have_repo || die "no backup repository on this host (run: psync backup setup)"
+  restic_repo snapshots --compact
+  echo "repository: $(du -sh "$BACKUP_REPO" | cut -f1) used, $(df -h --output=avail "$BACKUP_REPO" | tail -1 | tr -d ' ') free on the disk"
+  if [[ -r $STATE_DIR/backup-last ]]; then
+    echo "last run:   $(cut -d' ' -f1 "$STATE_DIR/backup-last") at $(date -d "@$(cut -d' ' -f2 "$STATE_DIR/backup-last")" '+%F %T')"
+  fi
+  backup_warning || true
+}
+
+cmd_backup() {
+  case ${1:-run} in
+    run) backup_run ;;
+    status) backup_status ;;
+    setup) backup_setup ;;
+    restic) shift; backup_have_repo || die "no backup repository on this host"; restic_repo "$@" ;;
+    *) die "usage: psync backup [run|status|setup|restic ARGS...]" ;;
+  esac
 }
 
 cmd_check() {
@@ -295,6 +378,7 @@ case ${1:-status} in
   status) cmd_status ;;
   wait) shift; cmd_wait "$@" ;;
   ready) shift; cmd_ready "$@" ;;
+  backup) shift; cmd_backup "$@" ;;
   conflicts) conflict_files ;;
   pause) api PATCH "config/folders/$FOLDER_ID" '{"paused": true}' >/dev/null && echo "paused — resume with: psync resume" ;;
   resume)
@@ -305,6 +389,6 @@ case ${1:-status} in
   check) cmd_check ;;
   tidy) park_index_conflicts ;;
   setup) shift; cmd_setup "$@" ;;
-  -h | --help | help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (see psync --help)" ;;
 esac

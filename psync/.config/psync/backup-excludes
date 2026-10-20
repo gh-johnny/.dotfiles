@@ -1,0 +1,48 @@
+# psync backup — restic exclude patterns for ~/projects. Without a leading "/" a pattern
+# matches at any depth. Same spirit as the stignore: rebuilt or per-host things are not worth
+# a snapshot, and logins never go into a backup.
+
+# Dependencies, build outputs and caches
+node_modules
+.venv
+venv
+__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.tox
+.cache
+.gradle
+.cxx
+.terraform
+.next
+.turbo
+target
+android/build
+android/app/build
+ios/build
+ios/Pods
+
+# Older copies Syncthing already keeps for 30 days
+.stversions
+
+# Live SQLite companions are meaningless without the process that has the DB open
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Logins and per-host runtime state of the harnesses
+.credentials.json
+.claude.json
+.claude.json.*
+codex/auth.json
+.codex/auth.json
+codex/*.sqlite*
+agent-mem/*.sqlite*
+.runtime

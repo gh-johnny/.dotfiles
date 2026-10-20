@@ -170,6 +170,43 @@ The git package sets `core.checkStat=minimal`, `core.trustctime=false` and
 `gc.worktreePruneExpire=never` so synced indexes stay valid and no host prunes
 another host's worktrees.
 
+### Backups (restic, VPS)
+
+Sync is not a backup: a deletion or a bad overwrite travels to the other host. Beyond the
+30-day `.stversions`, the VPS keeps restic snapshots of `~/projects` (deduplicated and
+compressed, about the size of the project data plus its churn) every day at 04:30 BRT.
+Kept: 7 daily, 4 weekly and 6 monthly. A run refuses to start with less than 30 GB free.
+
+```bash
+psync backup status                     # snapshots, repository size, free disk, last result
+psync backup                            # snapshot now (the timer runs the same)
+psync backup restic ls latest <path>    # any restic command against the repository
+psync backup restic restore latest --target /tmp/restore --include /home/jo/projects/<dir>
+```
+
+The repository (`~/.local/share/psync-backup/repo`) and its password
+(`~/.local/state/psync/backup-password`) stay outside `~/projects`, so they never sync.
+Copy the password somewhere safe: without it the snapshots cannot be opened. What is
+excluded is in `psync/.config/psync/backup-excludes` (caches, dependencies, logins). A failed
+or overdue backup shows up as a line in `psync ready`, i.e. at every SSH login to the VPS.
+To make another host take backups too: install restic and run `psync backup setup` there.
+
+### VPS: public SSH is closed
+
+The VPS holds a copy of every project, `.env` files included, so its only way in is the
+tailnet: the public `tcp/22` rule is gone from `/etc/iptables/rules.v4` and from the live
+firewall. Use `ssh jo@100.90.235.90` (Tailscale SSH, re-approved in the browser every 12h).
+`psync-ssh-guard.timer` (root, every minute, script `/usr/local/sbin/psync-ssh-guard`) is the
+way back in: if Tailscale is not `Running` for 5 minutes (stopped, node key expired) it reopens
+`tcp/22`, and it closes it again once Tailscale is back. The Tailscale node key of the VPS
+expires on 2027-04-04: turn key expiry off for that machine in the Tailscale admin console.
+
+Undo it: `sudo systemctl disable --now psync-ssh-guard.timer` and
+`sudo iptables -I INPUT 1 -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT`. The
+pre-change firewall is kept in `/root/psync-fw-backup` (`rules.v4`, `v4.dump`). `rpcbind` (port 111,
+unused) is disabled. The OCI security list was not touched: it is a second layer you can
+tighten in the console.
+
 ### Pairing a new host
 
 ```bash
