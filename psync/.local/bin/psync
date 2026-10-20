@@ -11,7 +11,10 @@
 #   psync tidy          park git-index conflict copies outside the synced tree
 #   psync check         tidy, then notify about conflicts, errors or a long disconnection (timer)
 #   psync doctor [--roundtrip]   health check of this host, for after any change; --roundtrip also sends a canary file through
-#   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR]
+#   psync hosts         every host in the mesh: state, how much it has, how this host reaches it
+#   psync add-host --id ID --name NAME [--address ADDR] [--no-introducer]   pair another host (on any host already in)
+#   psync remove-host NAME|ID [--yes]   stop syncing with a host (its files stay where they are)
+#   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR] [--no-introducer]
 #
 # Thin wrapper over the local Syncthing REST API. Every host runs the same setup;
 # ignore patterns live in dotfiles/psync/.config/psync/stignore, which syncs too.
@@ -36,6 +39,7 @@ DISK_WARN_GB=${PSYNC_DISK_WARN_GB:-20}
 ROUNDTRIP_TIMEOUT=${PSYNC_ROUNDTRIP_TIMEOUT:-90}
 KEY_WARN_DAYS=120
 KEY_FAIL_DAYS=30
+DEVICE_ID_RE='^([A-Z0-9]{7}-){7}[A-Z0-9]{7}$'
 
 die() { echo "psync: $*" >&2; exit 1; }
 
@@ -457,14 +461,129 @@ cmd_doctor() {
   fi
 }
 
+# --- The mesh. Every host is a full peer: any one of them can be lost or replaced and the others
+# keep a complete copy. Peers are marked as introducers by default (they are all yours): add a new
+# host to ONE existing host and the others learn its ID and share the folder with it by themselves.
+# Syncthing does not pass addresses along, and psync switches discovery off, so two hosts that only
+# know each other through an introducer reach each other via that host until one of them is given
+# the other's address (add-host --address). `psync hosts` shows which is which.
+
+# put_device ID NAME ADDRESS INTRODUCER(true|false)   (replaces the whole device entry)
+put_device() {
+  api PUT "config/devices/$1" "$(jq -n --arg id "$1" --arg name "$2" --arg addr "$3" --argjson intro "$4" \
+    '{deviceID: $id, name: $name, addresses: [$addr], compression: "metadata", autoAcceptFolders: false, introducer: $intro}')" >/dev/null
+}
+
+# share_folder ID: add the device to the folder unless it is already there (a folder config change
+# restarts the folder and rescans it, so do not touch it for nothing)
+share_folder() {
+  local folder
+  folder=$(api GET "config/folders/$FOLDER_ID")
+  jq -e --arg id "$1" '.devices | any(.deviceID == $id)' <<<"$folder" >/dev/null && return 0
+  api PUT "config/folders/$FOLDER_ID" "$(jq --arg id "$1" '.devices += [{deviceID: $id}]' <<<"$folder")" >/dev/null
+}
+
+# resolve_host NAME|ID → device ID of a configured peer
+resolve_host() {
+  local found
+  found=$(api GET config/devices | jq -r --arg t "$1" --arg me "$(my_id)" \
+    '.[] | select(.deviceID != $me and (.name == $t or .deviceID == $t)) | .deviceID')
+  [[ -n $found ]] || die "no host named or identified '$1' (see: psync hosts)"
+  [[ $(wc -l <<<"$found") == 1 ]] || die "'$1' matches more than one host, use its device ID"
+  echo "$found"
+}
+
+cmd_add_host() {
+  local id="" name="" addr=dynamic intro=true
+  while (($#)); do
+    case $1 in
+      --id) id=${2-}; shift 2 ;;
+      --name) name=${2-}; shift 2 ;;
+      --address) addr=${2-}; shift 2 ;;
+      --no-introducer) intro=false; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [[ $id =~ $DEVICE_ID_RE ]] || die "--id must be the other host's Syncthing device ID (8 groups of 7, from 'psync setup' or 'psync hosts' there)"
+  [[ -n $name ]] || die "--name is required"
+  [[ $id != "$(my_id)" ]] || die "that is this host's own device ID"
+  put_device "$id" "$name" "$addr" "$intro"
+  share_folder "$id"
+  echo "added host $name (${id:0:7}), reached via ${addr}$([[ $addr == dynamic ]] && echo ": it connects to this host, or through an introducer")"
+  echo "follow with: psync hosts"
+}
+
+cmd_remove_host() {
+  local target=${1-} id name answer
+  [[ -n $target ]] || die "usage: psync remove-host NAME|ID [--yes]"
+  shift
+  id=$(resolve_host "$target")
+  name=$(api GET "config/devices/$id" | jq -r .name)
+  if [[ ${1-} != --yes ]]; then
+    [[ -t 0 ]] || die "not a terminal: pass --yes to confirm removing $name"
+    read -r -p "Stop syncing ~/projects with $name? Its copy of the files stays where it is. [y/N] " answer
+    [[ $answer == [yY]* ]] || { echo "aborted"; return 1; }
+  fi
+  api PUT "config/folders/$FOLDER_ID" "$(api GET "config/folders/$FOLDER_ID" |
+    jq --arg id "$id" '.devices |= map(select(.deviceID != $id))')" >/dev/null
+  api DELETE "config/devices/$id" >/dev/null
+  echo "removed host $name (${id:0:7}); hosts that take this one as their introducer drop it too"
+}
+
+cmd_hosts() {
+  local me devs conns stats id name state seen synced via addr reach fmt width indirect=0
+  me=$(my_id)
+  devs=$(api GET config/devices)
+  conns=$(api GET system/connections)
+  stats=$(api GET stats/device)
+  width=$(jq -r '[.[].name | length + 7] + [16] | max' <<<"$devs")
+  fmt="%-${width}s %-8s %-10s %-7s %-20s %s\n"
+  # shellcheck disable=SC2059
+  printf "$fmt" HOST ID STATE SYNCED "LAST SEEN" "REACHED VIA"
+  for id in $(jq -r '.[].deviceID' <<<"$devs"); do
+    name=$(jq -r --arg id "$id" '.[] | select(.deviceID == $id) | .name' <<<"$devs")
+    if [[ $id == "$me" ]]; then
+      # shellcheck disable=SC2059
+      printf "$fmt" "$name (this)" "${id:0:7}" - - - -
+      continue
+    fi
+    via=$(jq -r --arg id "$id" '.[] | select(.deviceID == $id) | .introducedBy // ""' <<<"$devs")
+    addr=$(jq -r --arg id "$id" '.[] | select(.deviceID == $id) | .addresses | join(",")' <<<"$devs")
+    if [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]]; then
+      state=connected
+      seen=now
+      synced="$(api GET "db/completion?folder=$FOLDER_ID&device=$id" | jq -r '.completion | floor')%"
+    else
+      state=offline
+      seen=$(last_seen "$id" "$stats")
+      synced=-
+    fi
+    if [[ $addr == dynamic ]]; then
+      if [[ -n $via ]]; then
+        reach="through $(jq -r --arg v "$via" '.[] | select(.deviceID == $v) | .name' <<<"$devs") (introduced)"
+        indirect=$((indirect + 1))
+      else
+        reach="it dials this host"
+      fi
+    else
+      reach=$addr
+    fi
+    # shellcheck disable=SC2059
+    printf "$fmt" "$name" "${id:0:7}" "$state" "$synced" "$seen" "$reach"
+  done
+  ((indirect == 0)) ||
+    echo "note: hosts reached only through an introducer stop syncing with this one when that host is off; give them a direct address with: psync add-host --id ID --name NAME --address tcp://HOST:22000"
+}
+
 cmd_setup() {
-  local peer_id="" peer_name="" peer_address=dynamic listen="tcp://:22000"
+  local peer_id="" peer_name="" peer_address=dynamic listen="tcp://:22000" intro=true
   while (($#)); do
     case $1 in
       --peer-id) peer_id=$2; shift 2 ;;
       --peer-name) peer_name=$2; shift 2 ;;
       --peer-address) peer_address=$2; shift 2 ;;
       --listen) listen=$2; shift 2 ;;
+      --no-introducer) intro=false; shift ;;
       *) die "unknown option: $1" ;;
     esac
   done
@@ -498,9 +617,7 @@ cmd_setup() {
   local devices existing folder
   devices=$(jq -n --arg me "$(my_id)" '[{deviceID: $me}]')
   if [[ -n $peer_id ]]; then
-    api PUT "config/devices/$peer_id" "$(jq -n --arg id "$peer_id" --arg name "${peer_name:-$peer_id}" \
-      --arg addr "$peer_address" \
-      '{deviceID: $id, name: $name, addresses: [$addr], compression: "metadata", autoAcceptFolders: false}')" >/dev/null
+    put_device "$peer_id" "${peer_name:-$peer_id}" "$peer_address" "$intro"
     devices=$(jq --arg id "$peer_id" '. + [{deviceID: $id}]' <<<"$devices")
   fi
   if existing=$(api GET "config/folders/$FOLDER_ID" 2>/dev/null); then
@@ -534,8 +651,11 @@ case ${1:-status} in
     ;;
   check) cmd_check ;;
   doctor) shift; cmd_doctor "$@" ;;
+  hosts) cmd_hosts ;;
+  add-host) shift; cmd_add_host "$@" ;;
+  remove-host) shift; cmd_remove_host "$@" ;;
   tidy) park_index_conflicts ;;
   setup) shift; cmd_setup "$@" ;;
-  -h | --help | help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (see psync --help)" ;;
 esac

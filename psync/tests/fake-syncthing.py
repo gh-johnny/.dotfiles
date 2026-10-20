@@ -48,6 +48,13 @@ ROUTES = {
     "db/file": db_file,
     "folder/errors": lambda: (200, {"errors": None}),
     "system/connections": lambda: (200, {"connections": {"PEER": {"connected": scenario != "offline"}}}),
+    "config/devices": lambda: (
+        200,
+        [
+            {"deviceID": "ME", "name": "me", "addresses": ["dynamic"]},
+            {"deviceID": "PEER", "name": "pc", "addresses": ["tcp://100.64.0.1:22000"]},
+        ],
+    ),
     "config/devices/PEER": lambda: (200, {"name": "pc"}),
     "stats/device": lambda: (200, {"PEER": {"lastSeen": "2026-10-20T09:00:00-03:00"}}),
 }

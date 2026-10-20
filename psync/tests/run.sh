@@ -78,7 +78,7 @@ serve() { # SCENARIO
 
 run() { # psync ARGS... → $out $rc $secs
   local start=$SECONDS
-  out=$(psync "$@" 2>&1)
+  out=$(psync "$@" 2>&1 </dev/null)
   rc=$?
   secs=$((SECONDS - start))
 }
@@ -167,6 +167,51 @@ compgen -G "$H/projects/.psync-canary-*" >/dev/null && no "the canary file is re
 serve stuck;   RT=4 run doctor --roundtrip; check "a canary that never arrives fails" 1 "roundtrip: the canary did not reach pc within 4s"
 serve offline; run doctor --roundtrip;      check "no connected peer: says so" 1 "roundtrip: no peer is connected"
 stop
+
+echo "hosts"
+VALID_ID=AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH
+serve quiet;   run hosts; check "lists this host and its peer with how much it has" 0 "me (this)" "pc" "connected" "100%" "tcp://100.64.0.1:22000"
+serve offline; run hosts; check "an offline peer shows when it was last seen" 0 "offline" "2026-10-20T09:00:00"
+serve quiet
+run add-host --id NOTANID --name x;       check "add-host rejects a malformed device ID" 1 "must be the other host's Syncthing device ID"
+run add-host --id "$VALID_ID";            check "add-host needs a name" 1 "--name is required"
+run remove-host;                          check "remove-host needs an argument" 1 "usage: psync remove-host"
+run remove-host nobody --yes;             check "remove-host refuses an unknown host" 1 "no host named or identified 'nobody'"
+run remove-host pc;                       check "remove-host does not guess without a terminal" 1 "pass --yes"
+stop
+
+echo "install.sh (--plan only: nothing is installed)"
+# A home whose ~/projects/dotfiles is this checkout, and a PATH with none of the tools psync needs
+mkdir -p "$T/ihome/projects" "$T/minbin"
+ln -s "$(cd "$HERE/../.." && pwd -P)" "$T/ihome/projects/dotfiles"
+for tool in dirname sed cat; do ln -sf "$(command -v $tool)" "$T/minbin/$tool"; done
+printf 'ID=ubuntu\nID_LIKE=debian\n' >"$T/os-debian"
+printf 'ID=arch\n' >"$T/os-arch"
+printf 'ID=plan9\n' >"$T/os-other"
+printf '#!/bin/sh\necho "syncthing v${FAKE_ST_VERSION:-2.1.0} fake"\n' >"$T/minbin/syncthing"
+chmod +x "$T/minbin/syncthing"
+plan() { # OS-FILE [install.sh args...]
+  local osf=$1
+  shift
+  out=$(env -i HOME="$T/ihome" USER=tester PATH="$T/minbin" PSYNC_OS_RELEASE="$osf" FAKE_ST_VERSION="${FAKE_ST_VERSION:-}" \
+    "$BASH" "$HERE/../install.sh" --plan "$@" 2>&1 </dev/null)
+  rc=$?
+}
+mv "$T/minbin/syncthing" "$T/syncthing.shim"
+plan "$T/os-debian"
+check "debian: adds the Syncthing 2 repository and installs everything missing" 0 "stable-v2" "apt-get update" "apt-get install -y jq curl stow git syncthing" "stow --no-folding" "enable-linger"
+plan "$T/os-debian" --with-backup
+check "debian: --with-backup also asks for restic and openssl" 0 "jq curl stow git restic openssl syncthing"
+plan "$T/os-arch"
+check "arch: installs with pacman, no apt repository" 0 "pacman -S --needed --noconfirm jq curl stow git syncthing" "!apt-get" "!stable-v2"
+plan "$T/os-other"
+check "an unsupported distribution says what to install by hand" 1 "unsupported distribution" "syncthing (2 or newer)"
+cp "$T/syncthing.shim" "$T/minbin/syncthing"
+plan "$T/os-debian"
+check "debian with Syncthing 2 already there: no extra repository" 0 "apt-get install -y jq curl stow git" "!stable-v2" "!syncthing"
+FAKE_ST_VERSION=1.29.5 plan "$T/os-debian"
+check "debian with Syncthing 1.x: still adds the 2.x repository" 0 "stable-v2" "syncthing"
+rm -f "$T/minbin/syncthing"
 
 echo "vps/install.sh"
 V=$T/vps-home
