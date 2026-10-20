@@ -26,6 +26,11 @@
 [rerere]
 	enabled = true           # Record and reuse conflict resolutions
 	autoupdate = true        # Apply stored conflict resolutions automatically
+[core]
+	checkStat = minimal      # psync: an index synced from another host stays valid (mtime+size only)
+	trustctime = false       # psync: ctime/inode differ per host after sync
+[gc]
+	worktreePruneExpire = never  # psync: never auto-prune worktrees missing on one host
 [user]
 	name = Joao Marcelo Furtado Romero
 	email = jmfurtadoromero@gmail.com

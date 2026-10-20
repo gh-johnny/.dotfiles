@@ -33,6 +33,7 @@ dotfiles/
 ├── kitty/        → ~/.config/kitty/
 ├── lazygit/      → ~/.config/lazygit/
 ├── nvim/         → ~/.config/nvim/
+├── psync/        → ~/.local/bin/psync, ~/.config/psync/, systemd user timer
 ├── ssh/          → ~/.ssh/config
 ├── starship/     → ~/.config/starship.toml
 ├── tmux/         → ~/.tmux.conf
@@ -113,4 +114,56 @@ ls -la ~/.config/<pkg>
 
 ```bash
 ssh-add ~/.ssh/gh   # enter passphrase once; keychain handles the rest
+```
+
+## Sync between hosts (psync)
+
+`~/projects` is mirrored continuously between the PC and the VPS with
+[Syncthing](https://syncthing.net), both hosts always on as peers. Everything
+travels, including untracked files, `.env`, `.git`, worktrees and harness chat
+history (Claude Code and Codex sessions live inside `ai-agents/agents/*`).
+Both hosts use the same absolute paths (`/home/jo/...`), so worktree `gitdir:`
+links and Claude Code's per-path session folders work unchanged.
+
+```bash
+psync status      # peers, pending changes, conflicts (exit 1 if not in sync)
+psync wait        # block until every peer has everything — run before shutting the PC down
+psync conflicts   # list *.sync-conflict-* files
+psync pause       # stop syncing on this host (stays paused across reboots)
+psync resume      # start again, picks up where it stopped
+```
+
+On the PC a user timer (`psync-check.timer`) raises a desktop notification for
+new conflicts, folder errors or a peer disconnected for over an hour.
+
+**What stays per host** (`psync/.config/psync/stignore`, synced, applies everywhere):
+dependencies and build caches (`node_modules`, `.venv`, `target`, `.terraform`, …,
+rebuilt natively — the VPS is ARM), git lock files, SQLite `-wal/-shm` files, logins
+(`.credentials.json`, Codex `auth.json`) and live runtime state of the harnesses,
+including Codex's `*.sqlite`, claude-mem databases and gitignored `.runtime/` dirs.
+Rule when editing the ignore file: whatever git *tracks* must sync, or it shows up as
+deleted on the other host — carve tracked files out with a `!` exception placed
+before the pattern that would hide them.
+
+**Working on both hosts at once:** safe as long as each repo checkout is written by
+one host at a time — give the VPS agent its own worktree and branch. Two hosts
+writing the same file produce a `*.sync-conflict-*` copy (nothing is lost; the
+newer edit wins). Files replaced or deleted by the other host are kept for 30 days
+in `~/projects/.stversions`.
+
+The git package sets `core.checkStat=minimal`, `core.trustctime=false` and
+`gc.worktreePruneExpire=never` so synced indexes stay valid and no host prunes
+another host's worktrees.
+
+### Pairing a new host
+
+```bash
+# 1. Same user name and home path as the PC (/home/jo); Syncthing ≥ 2, jq, curl, stow.
+# 2. Copy the psync package before the first sync (the ignore file must exist):
+tar -C ~/projects -cf - dotfiles/psync | ssh NEWHOST 'mkdir -p ~/projects ~/.local/bin ~/.config/systemd/user && tar -C ~/projects -xpf -'
+# 3. On the new host (it dials the PC; tailnet ACL only allows connections towards the PC):
+stow --no-folding --dir=~/projects/dotfiles --target=$HOME psync
+psync setup --peer-id <PC device ID> --peer-name pc --peer-address tcp://<PC tailscale IP>:22000 --listen tcp://127.0.0.1:22000
+# 4. On the PC, accept it:
+psync setup --peer-id <new host device ID> --peer-name <name>
 ```

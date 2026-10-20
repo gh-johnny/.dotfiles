@@ -44,7 +44,7 @@ done
 DOTFILES="$HOME/projects/dotfiles"
 DOTFILES_PACKAGES=(
     alacritty autostart btop fastfetch git ghostty hypr
-    kitty lazygit nvim ssh starship tmux walker waybar zsh
+    kitty lazygit nvim psync ssh starship tmux walker waybar zsh
 )
 
 # =============================================================================
@@ -70,7 +70,7 @@ fi
 section "2 — Dotfiles"
 # =============================================================================
 
-sudo pacman -S --needed stow
+sudo pacman -S --needed stow syncthing jq
 
 if [[ ! -d "$DOTFILES" ]]; then
     info "Cloning dotfiles..."
@@ -82,6 +82,7 @@ fi
 
 info "Stowing packages..."
 stow --dir="$DOTFILES" --target="$HOME" "${DOTFILES_PACKAGES[@]}"
+info "To sync ~/projects with other hosts, pair them with psync (README: Sync between hosts)"
 
 # =============================================================================
 section "3 — Shell"
