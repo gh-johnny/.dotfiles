@@ -3,6 +3,7 @@
 #
 #   psync status        peers, pending changes and conflicts (exit 1 if not in sync)
 #   psync wait [SECS]   block until every peer has everything (default timeout 600s)
+#   psync ready [SECS]  for launchers and logins: wait briefly until this host caught up, never fails
 #   psync conflicts     list *.sync-conflict-* files
 #   psync pause         stop syncing on this host (survives reboots)
 #   psync resume        continue where it stopped
@@ -46,6 +47,13 @@ my_id() { api GET system/status | jq -r .myID; }
 
 peers() {
   api GET "config/folders/$FOLDER_ID" | jq -r --arg me "$(my_id)" '.devices[].deviceID | select(. != $me)'
+}
+
+# last_seen DEVICE_ID [STATS_JSON]   (stats/device is fetched when not given)
+last_seen() {
+  jq -r --arg id "$1" '.[$id].lastSeen // "" |
+    if . == "" or startswith("1969") or startswith("1970") then "never" else .[0:19] end' \
+    <<<"${2:-$(api GET stats/device)}"
 }
 
 conflict_files() {
@@ -102,8 +110,7 @@ report() {
       echo "peer:      $name connected, has ${completion}% of this host's data"
       [[ $completion == 100 ]] || rc=1
     else
-      echo "peer:      $name DISCONNECTED (last seen $(jq -r --arg id "$id" '.[$id].lastSeen // "" |
-        if . == "" or startswith("1969") or startswith("1970") then "never" else .[0:19] end' <<<"$stats"))"
+      echo "peer:      $name DISCONNECTED (last seen $(last_seen "$id" "$stats"))"
       rc=1
     fi
   done
@@ -140,6 +147,47 @@ cmd_wait() {
   done
   cmd_status || true
   die "still not in sync after ${timeout}s"
+}
+
+# Run before work starts on this host (the `ai` launcher, an SSH login). Instant and silent
+# when there is nothing to pull; otherwise waits (default 60s) for what the other host
+# already announced, so a half-arrived commit is not met by git. Says so when a peer is
+# offline, because whatever it has not sent yet cannot be here. Never fails, never blocks
+# longer than SECS: Ctrl-C skips the wait. Edits made on the other host in the last ~10s
+# are not announced yet; that side's `psync wait` covers them.
+cmd_ready() {
+  local timeout=${1:-60} start=$SECONDS waited=0 settled=0 caught_up=0 db conns id
+  trap 'echo "psync: wait skipped" >&2; exit 0' INT
+  api GET system/ping >/dev/null 2>&1 || { echo "psync: Syncthing is not running here (psync resume)" >&2; return 0; }
+  [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == false ]] \
+    || { echo "psync: sync is paused on this host (psync resume)" >&2; return 0; }
+
+  while true; do
+    db=$(api GET "db/status?folder=$FOLDER_ID")
+    if [[ $(jq -r '.state + (.needTotalItems | tostring)' <<<"$db") == idle0 ]]; then
+      # After a wait, look once more: the next batch may be announced only now.
+      if ((waited == 0 || settled++ > 0)); then
+        caught_up=1
+        break
+      fi
+    else
+      settled=0
+      ((waited++ > 0)) || echo "psync: catching up with the other host (Ctrl-C skips)..." >&2
+    fi
+    if ((SECONDS - start >= timeout)); then
+      echo "psync: still syncing after ${timeout}s, continuing anyway (follow with: psync wait)" >&2
+      break
+    fi
+    sleep 2
+  done
+  ((waited > 0 && caught_up)) && echo "psync: caught up" >&2
+
+  conns=$(api GET system/connections)
+  for id in $(peers); do
+    [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] && continue
+    echo "psync: $(api GET "config/devices/$id" | jq -r .name) is offline (last seen $(last_seen "$id")), so what it has not sent yet is not here" >&2
+  done
+  return 0
 }
 
 cmd_check() {
@@ -246,6 +294,7 @@ cmd_setup() {
 case ${1:-status} in
   status) cmd_status ;;
   wait) shift; cmd_wait "$@" ;;
+  ready) shift; cmd_ready "$@" ;;
   conflicts) conflict_files ;;
   pause) api PATCH "config/folders/$FOLDER_ID" '{"paused": true}' >/dev/null && echo "paused — resume with: psync resume" ;;
   resume)
@@ -256,6 +305,6 @@ case ${1:-status} in
   check) cmd_check ;;
   tidy) park_index_conflicts ;;
   setup) shift; cmd_setup "$@" ;;
-  -h | --help | help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (see psync --help)" ;;
 esac

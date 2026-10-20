@@ -128,6 +128,7 @@ links and Claude Code's per-path session folders work unchanged.
 ```bash
 psync status      # peers, pending changes, conflicts (exit 1 if not in sync)
 psync wait        # block until every peer has everything — run before shutting the PC down
+psync ready       # the other direction: wait briefly until THIS host has caught up (never fails)
 psync conflicts   # list *.sync-conflict-* files
 psync pause       # stop syncing on this host (stays paused across reboots)
 psync resume      # start again, picks up where it stopped
@@ -151,7 +152,12 @@ writing the same file produce a `*.sync-conflict-*` copy (nothing is lost; the
 newer edit wins). Files replaced or deleted by the other host are kept for 30 days
 in `~/projects/.stversions`.
 
-**Switching hosts inside one repo:** run `psync wait` first. A commit's refs can arrive
+**Switching hosts inside one repo:** `psync wait` on the host you are leaving; the host
+you arrive on runs `psync ready` by itself (the `ai` function in `zsh/.zshrc`, and an SSH
+login hook in the VPS `~/.zshrc`). `ready` is instant when nothing is pending, waits up to
+a minute while the other host's changes are still arriving, and warns when that host is
+offline. It cannot see edits the other host made in the last ~10s or while it is
+offline/asleep, so `psync wait` before leaving stays the one manual step. A commit's refs can arrive
 a few seconds before its objects and `.git/index` after both, and running git on the
 other host in that window (even `git status`, which rewrites the index) makes an older
 index win the sync. The result is only a stale index, never lost commits: fix it with

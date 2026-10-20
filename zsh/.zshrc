@@ -40,7 +40,9 @@ alias ssh-session='eval "$(ssh-agent -s)" && ssh-add $HOME/.ssh/gh'
 #   ai uni --llm codex -m gpt-5 "fix"   # launch codex instead (needs agents/uni/codex/)
 #   ai uni --rc [--session dev-uni]     # tmux window + remote control (claude only)
 # Agent keys + per-LLM config live in config/agent-registry.json (run `ai` with no args to list).
-alias ai='/home/jo/projects/ai-agents/scripts/launch-agent.sh'
+# psync ready: let what the other host already sent arrive before the agent starts (instant when synced)
+unalias ai 2>/dev/null
+ai() { psync ready; /home/jo/projects/ai-agents/scripts/launch-agent.sh "$@"; }
 
 
 export TERMINAL=alacritty
