@@ -11,7 +11,9 @@ that syncs). Both are on the tailnet and both keep a full copy of `~/projects`.
 |---|---|
 | leaving a host for the other | `psync wait` (the one manual step) |
 | arriving on a host | nothing: `psync ready` runs by itself in the `ai` launcher and at SSH login |
-| changed anything psync-related | `bash ~/projects/dotfiles/psync/tests/run.sh`, then `psync doctor --roundtrip` on **both** hosts |
+| changed anything psync-related | `bash ~/projects/dotfiles/psync/tests/run.sh` (and `tests/mesh.sh` if it touches pairing or hosts), then `psync doctor --roundtrip` on **every** host |
+| want to see who is in the mesh | `psync hosts` |
+| adding, replacing or removing a host | "Adding or replacing a host" below |
 | curious whether all is well | `psync doctor` (read-only, instant) |
 
 `psync doctor` prints `ok` / `warn` / `FAIL` per check and exits 1 only on FAIL. A warn is something
@@ -77,21 +79,53 @@ it the snapshots cannot be opened, and there is no recovery: start a new reposit
    guard logic with a fake `tailscale` and firewall. Still unproven: getting in through the OCI
    console (`ubuntu` has no password).
 
+## Adding or replacing a host
+
+The mesh is symmetric: every host is a full peer holding a complete copy, so any one of them can be
+lost or swapped and the others carry on. `bash psync/tests/mesh.sh` proves it with real Syncthing in
+four sandboxes: pairing through one host, files crossing it, a direct link surviving that host going
+down, a replacement receiving everything from the survivors, and removal. Every host needs the same
+user name and home path (worktree `gitdir:` links and Claude Code's per-path session folders depend on
+it).
+
+1. **Prepare the host** (Debian, Ubuntu or Arch, as the sync user). Copy the `psync` package over and run
+   `bash ~/projects/dotfiles/psync/install.sh` (`--plan` first if you want to see it; `--with-backup`
+   adds restic). It installs Syncthing 2 (the Debian/Ubuntu archives still carry 1.x, so it adds the
+   official `stable-v2` apt repository), `jq`, `curl`, `stow`, `git`, links the package and enables
+   linger. Tested for real on a clean Ubuntu with `bash psync/tests/install-docker.sh`.
+2. **Join through one host that is already in:** on the new host,
+   `psync setup --peer-id <its ID> --peer-name <name> --peer-address tcp://<its address>:22000 --listen tcp://127.0.0.1:22000`
+   (it prints the new host's own ID; use `--listen tcp://:22000` on a host the others should dial).
+3. **Accept it there:** on the host you joined through, `psync add-host --id <new ID> --name <new name>`.
+   Peers are introducers by default (they are all yours), so the other hosts learn the new one and share
+   the folder with it by themselves. Syncthing then rescans the folder, which takes minutes on a large one.
+4. **Hosts that should still sync when the introducer is off** need each other's address, because
+   Syncthing does not pass addresses along and psync switches discovery off:
+   `psync add-host --id <ID> --name <name> --address tcp://<address>:22000` on both. `psync hosts` shows
+   which are reached "through" another host and which directly.
+5. **Check:** `psync hosts` (everyone connected, 100%), then `psync doctor --roundtrip` on each host.
+6. **Replacing a host:** do 1 to 5 for the new one first and wait until `psync hosts` shows it at 100%.
+   Then `psync remove-host <old name> --yes` on the hosts that knew it; hosts that took the removed host
+   as their introducer drop it on their own. The files on the removed host stay there.
+
+Backups are per host: give every host that should keep its own history `psync backup setup` (and save
+each password separately). Two independent repositories do not depend on each other.
+
 ## Rebuild the VPS from nothing
 
 The PC still has every file, so only the restic history (which lives only on the VPS) is lost.
 
 1. New Ubuntu instance. Create user `jo` (same name and home path as the PC: worktree `gitdir:`
-   links and Claude Code's per-path session folders depend on `/home/jo`) and run
-   `sudo loginctl enable-linger jo`.
-2. Install: `syncthing` (from the Syncthing apt repo), `restic`, `jq`, `stow`, `git`, `curl`, `zsh`,
-   `tmux`, `neovim`, `nodejs`, `npm`, `iptables-persistent`, `gh`, and `tailscale`. Join the tailnet
-   with SSH enabled, approve the node, **disable key expiry** for it.
+   links and Claude Code's per-path session folders depend on `/home/jo`).
+2. Copy the `psync` package over and run `install.sh --with-backup` as `jo` (see "Adding or replacing a
+   host", step 1): it installs Syncthing 2, `restic`, `jq`, `stow`, `git`, `curl`, links the package and
+   enables linger. Then install by hand what it does not handle: `zsh`, `tmux`, `neovim`, `nodejs`,
+   `npm`, `iptables-persistent`, `gh` and `tailscale`. Join the tailnet with SSH enabled, approve the
+   node, **disable key expiry** for it.
 3. Install Claude Code and Codex for `jo`, then log in to Claude, Codex and `gh` **on the VPS**.
    Credentials are never copied between hosts.
-4. Pair it as in the README ("Pairing a new host"): copy the `psync` package over, `stow --no-folding`,
-   `psync setup` on the VPS and on the PC. Then wait: the first sync moves everything (about 500k
-   files, 18GB) and takes hours. `psync status` until in sync.
+4. Pair it as in "Adding or replacing a host" (steps 2 and 3). Then wait: the first sync moves
+   everything (about 500k files, 18GB) and takes hours. `psync status` until in sync.
 5. `bash ~/projects/dotfiles/psync/vps/install.sh user`, then `sudo bash .../vps/install.sh root`
    (the public-SSH guard; do it from a Tailscale session, not from the public address).
 6. `psync backup setup`, and save the new password.
@@ -130,7 +164,8 @@ receive everything; check `psync status` and the VPS's `git status` before trust
 | Syncthing identity and config | `~/.local/state/syncthing` on each host | no, per host |
 | logins (Claude, Codex, `gh`) | per host | never |
 | restic repository and password | VPS only, outside `~/projects` | no |
-| tests | `psync/tests/run.sh` (about 45 checks, 30-60s, no side effects) | `psync/tests/` |
+| tests | `run.sh` (about 60 checks against a fake Syncthing, under a minute), `mesh.sh` (real Syncthing, 4 sandboxes, about 35s), `install-docker.sh` (clean Ubuntu in docker, needs network). None touch your own hosts | `psync/tests/` |
+| host installer | `psync/install.sh` (packages, link, linger; `--plan` changes nothing) | `psync/` |
 
 ## Limits worth remembering
 
@@ -138,5 +173,9 @@ receive everything; check `psync status` and the VPS's `git status` before trust
   off or asleep. `psync wait` before leaving stays manual.
 - Two hosts writing the same repo at the same moment is the one thing to avoid; a separate worktree per
   host is fine.
+- A live agent session keeps `psync wait` from reaching "in sync": a Codex or Claude session that is
+  still appending to its transcript (these can be hundreds of MB) leaves the other host a few KB
+  behind at every moment. Seen on 2026-10-20 with a 197MB Codex rollout; `psync hosts` showed the peer
+  at 98% while the folder itself was idle. Close or pause the session, then wait.
 - Dependencies (`node_modules`, `.venv`, `target`) are rebuilt per host: the VPS is ARM.
 - The backups sit on the same disk as the VPS copy of the data. The PC is the other full copy.

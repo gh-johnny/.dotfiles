@@ -133,11 +133,15 @@ psync conflicts   # list *.sync-conflict-* files
 psync pause       # stop syncing on this host (stays paused across reboots)
 psync resume      # start again, picks up where it stopped
 psync doctor      # health check of this host (--roundtrip also sends a canary file to the peers)
+psync hosts       # every host in the mesh: state, how much it has, how this host reaches it
+psync add-host --id ID --name NAME [--address ADDR]   # pair another host (run on a host already in)
+psync remove-host NAME                                # stop syncing with a host (its files stay on it)
 ```
 
-Run `psync doctor --roundtrip` on both hosts after changing anything psync-related, and
-`bash psync/tests/run.sh` (about 45 checks against a fake Syncthing, no side effects). What to do
-when something looks wrong, how to recover data, and how to rebuild either host:
+Run `psync doctor --roundtrip` on every host after changing anything psync-related, and
+`bash psync/tests/run.sh` (about 60 checks against a fake Syncthing, no side effects). The mesh
+claims below are backed by `bash psync/tests/mesh.sh` (real Syncthing in four sandboxes). What to
+do when something looks wrong, how to recover data, and how to add, replace or rebuild a host:
 [`psync/RUNBOOK.md`](psync/RUNBOOK.md).
 
 On the PC a user timer (`psync-check.timer`) raises a desktop notification for
@@ -216,15 +220,28 @@ pre-change firewall is kept in `/root/psync-fw-backup` (`rules.v4`, `v4.dump`). 
 unused) is disabled. The OCI security list was not touched: it is a second layer you can
 tighten in the console.
 
-### Pairing a new host
+### Pairing a new host (or replacing one)
+
+Every host is a full peer, so adding the third or the fifth is the same as adding the second, and a
+lost host is replaced the same way (RUNBOOK.md, "Adding or replacing a host"). Debian, Ubuntu and
+Arch; `install.sh --plan` shows what it would do without changing anything.
 
 ```bash
-# 1. Same user name and home path as the PC (/home/jo); Syncthing ≥ 2, jq, curl, stow.
-# 2. Copy the psync package before the first sync (the ignore file must exist):
-tar -C ~/projects -cf - dotfiles/psync | ssh NEWHOST 'mkdir -p ~/projects ~/.local/bin ~/.config/systemd/user && tar -C ~/projects -xpf -'
-# 3. On the new host (it dials the PC; tailnet ACL only allows connections towards the PC):
-stow --no-folding --dir=~/projects/dotfiles --target=$HOME psync
-psync setup --peer-id <PC device ID> --peer-name pc --peer-address tcp://<PC tailscale IP>:22000 --listen tcp://127.0.0.1:22000
-# 4. On the PC, accept it:
-psync setup --peer-id <new host device ID> --peer-name <name>
+# 1. Same user name and home path as the other hosts (/home/jo). Copy the psync package over before
+#    the first sync (the shared ignore file must exist there), then install the tools and link it:
+tar -C ~/projects -cf - dotfiles/psync | ssh NEWHOST 'mkdir -p ~/projects && tar -C ~/projects -xpf -'
+ssh NEWHOST 'bash ~/projects/dotfiles/psync/install.sh'
+# 2. On the new host, join through ONE host that is already in (the tailnet ACL only allows
+#    connections towards the PC, so the new host dials it):
+psync setup --peer-id <device ID of that host> --peer-name pc --peer-address tcp://<its tailscale IP>:22000 --listen tcp://127.0.0.1:22000
+# 3. On that host, accept the new one; the other hosts learn about it from there (introducer):
+psync add-host --id <the new host's device ID> --name <name>
+# 4. See the mesh and prove it end to end:
+psync hosts
+psync doctor --roundtrip
 ```
+
+Two hosts that should keep syncing when the host that introduced them is off need each other's
+address: `psync add-host --id ID --name NAME --address tcp://HOST:22000` on both (`psync hosts` says
+which hosts are reached "through" another and which directly). Adding a host changes the folder
+configuration, so Syncthing rescans the folder (minutes on a large one).
