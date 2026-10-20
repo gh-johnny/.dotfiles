@@ -1,0 +1,541 @@
+#!/usr/bin/env bash
+# psync — keep ~/projects identical on every host with Syncthing.
+#
+#   psync status        peers, pending changes and conflicts (exit 1 if not in sync)
+#   psync wait [SECS]   block until every peer has everything (default timeout 600s)
+#   psync ready [SECS]  for launchers and logins: wait briefly until this host caught up, never fails
+#   psync backup [run|status|setup|restic ARGS...]   restic snapshots of ~/projects (opt-in per host)
+#   psync conflicts     list *.sync-conflict-* files
+#   psync pause         stop syncing on this host (survives reboots)
+#   psync resume        continue where it stopped
+#   psync tidy          park git-index conflict copies outside the synced tree
+#   psync check         tidy, then notify about conflicts, errors or a long disconnection (timer)
+#   psync doctor [--roundtrip]   health check of this host, for after any change; --roundtrip also sends a canary file through
+#   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR]
+#
+# Thin wrapper over the local Syncthing REST API. Every host runs the same setup;
+# ignore patterns live in dotfiles/psync/.config/psync/stignore, which syncs too.
+
+set -euo pipefail
+
+FOLDER_ID=projects
+FOLDER_PATH="$HOME/projects"
+IGNORE_INCLUDE="dotfiles/psync/.config/psync/stignore"
+ST_HOME="${STHOMEDIR:-$HOME/.local/state/syncthing}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/psync"
+VERSIONS_MAX_AGE=$((30 * 86400))
+DISCONNECT_WARN_AFTER=3600
+# Backups live outside ~/projects (or they would be synced back), password included.
+BACKUP_REPO="${XDG_DATA_HOME:-$HOME/.local/share}/psync-backup/repo"
+BACKUP_PASSWORD="$STATE_DIR/backup-password"
+BACKUP_EXCLUDES="$HOME/.config/psync/backup-excludes"
+BACKUP_MIN_FREE_GB=30
+BACKUP_KEEP=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
+BACKUP_STALE_AFTER=$((36 * 3600))
+DISK_WARN_GB=${PSYNC_DISK_WARN_GB:-20}
+ROUNDTRIP_TIMEOUT=${PSYNC_ROUNDTRIP_TIMEOUT:-90}
+KEY_WARN_DAYS=120
+KEY_FAIL_DAYS=30
+
+die() { echo "psync: $*" >&2; exit 1; }
+
+config_value() {
+  local cfg="$ST_HOME/config.xml"
+  [[ -r $cfg ]] || die "no Syncthing config at $cfg (run: psync setup)"
+  case $1 in
+    apikey) sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "$cfg" | head -1 ;;
+    address) sed -n '/<gui /,/<\/gui>/s:.*<address>\(.*\)</address>.*:\1:p' "$cfg" | head -1 ;;
+  esac
+}
+
+# api METHOD PATH [JSON]
+api() {
+  local method=$1 path=$2 body=${3-}
+  local args=(-fsS --max-time 120 -X "$method" -H "X-API-Key: $(config_value apikey)")
+  [[ -n $body ]] && args+=(-H 'Content-Type: application/json' --data "$body")
+  curl "${args[@]}" "http://$(config_value address)/rest/$path"
+}
+
+my_id() { api GET system/status | jq -r .myID; }
+
+peers() {
+  api GET "config/folders/$FOLDER_ID" | jq -r --arg me "$(my_id)" '.devices[].deviceID | select(. != $me)'
+}
+
+# last_seen DEVICE_ID [STATS_JSON]   (stats/device is fetched when not given)
+last_seen() {
+  jq -r --arg id "$1" '.[$id].lastSeen // "" |
+    if . == "" or startswith("1969") or startswith("1970") then "never" else .[0:19] end' \
+    <<<"${2:-$(api GET stats/device)}"
+}
+
+conflict_files() {
+  find "$FOLDER_PATH" \( -name node_modules -o -name .venv -o -name .stversions \) -prune \
+    -o -name '*.sync-conflict-*' -print 2>/dev/null
+}
+
+# `git status` rewrites .git/index, so two hosts touching the same repo at the same
+# moment make Syncthing keep a losing copy. The index is a cache (staged content
+# survives as objects), so park those copies outside the synced tree for a week
+# instead of raising an alarm.
+park_index_conflicts() {
+  local f dest="$STATE_DIR/index-conflicts"
+  mkdir -p "$dest"
+  while IFS= read -r -d '' f; do
+    mv -- "$f" "$dest/$(date +%s)-${f//\//_}" && echo "parked git index conflict: ${f#"$FOLDER_PATH"/}"
+  done < <(find "$FOLDER_PATH" \( -name node_modules -o -name .venv -o -name .stversions \) -prune \
+    -o -path '*/.git/*' -name 'index.sync-conflict-*' -mmin +2 -print0 2>/dev/null)
+  find "$dest" -type f -mtime +7 -delete 2>/dev/null || true
+}
+
+# Edits made while Syncthing's startup scan runs are never reported by the filesystem
+# watcher and would wait for the next scheduled full rescan (a day). So once per
+# Syncthing start, as soon as the startup scan is over, request one more full scan.
+settle_scan() {
+  local started
+  started=$(api GET system/status | jq -r .startTime)
+  [[ $(cat "$STATE_DIR/settled-start" 2>/dev/null) != "$started" ]] || return 0
+  [[ $(api GET "db/status?folder=$FOLDER_ID" | jq -r .state) == idle ]] || return 0
+  echo "$started" >"$STATE_DIR/settled-start"
+  # The call returns only when the scan ends; the request itself is queued at once.
+  api POST "db/scan?folder=$FOLDER_ID" >/dev/null 2>&1 &
+  sleep 1
+}
+
+# Prints folder, peer and error lines; returns 0 only when nothing is pending anywhere.
+report() {
+  local db conns stats errors rc=0
+  if [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == true ]]; then
+    echo "folder:    PAUSED on this host (psync resume)"
+    return 1
+  fi
+  db=$(api GET "db/status?folder=$FOLDER_ID")
+  jq -r '"folder:    \(.state), \(.needTotalItems) item(s) / \(.needBytes) bytes to pull"' <<<"$db"
+  [[ $(jq -r '.state + (.needTotalItems | tostring)' <<<"$db") == idle0 ]] || rc=1
+
+  conns=$(api GET system/connections)
+  stats=$(api GET stats/device)
+  for id in $(peers); do
+    local name completion
+    name=$(api GET "config/devices/$id" | jq -r .name)
+    if [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]]; then
+      completion=$(api GET "db/completion?folder=$FOLDER_ID&device=$id" | jq -r '.completion | floor')
+      echo "peer:      $name connected, has ${completion}% of this host's data"
+      [[ $completion == 100 ]] || rc=1
+    else
+      echo "peer:      $name DISCONNECTED (last seen $(last_seen "$id" "$stats"))"
+      rc=1
+    fi
+  done
+
+  errors=$(api GET "folder/errors?folder=$FOLDER_ID" | jq '.errors // [] | length')
+  if ((errors > 0)); then
+    echo "errors:    $errors (details: journalctl --user -u syncthing, or the GUI at $(config_value address))"
+    rc=1
+  fi
+  return $rc
+}
+
+cmd_status() {
+  local rc=0 conflicts
+  report || rc=1
+  conflicts=$(conflict_files | wc -l)
+  ((conflicts == 0)) || { echo "conflicts: $conflicts (psync conflicts)"; rc=1; }
+  ((rc == 0)) && echo "in sync" || echo "NOT in sync"
+  return $rc
+}
+
+cmd_wait() {
+  local timeout=${1:-600} stable=0 start=$SECONDS
+  # No forced rescan: the filesystem watcher already reports edits (a full rescan of
+  # ~500k files takes ~6 min and would block the folder). Four clean checks 5s apart
+  # span the 10s watcher delay, so an edit made just before this call is not missed.
+  while ((SECONDS - start < timeout)); do
+    if report >/dev/null; then
+      ((++stable < 4)) || { cmd_status; return; }
+    else
+      stable=0
+    fi
+    sleep 5
+  done
+  cmd_status || true
+  die "still not in sync after ${timeout}s"
+}
+
+# Run before work starts on this host (the `ai` launcher, an SSH login). Instant and silent
+# when there is nothing to pull; otherwise waits (default 60s) for what the other host
+# already announced, so a half-arrived commit is not met by git. Says so when a peer is
+# offline, because whatever it has not sent yet cannot be here. Never fails, never blocks
+# longer than SECS: Ctrl-C skips the wait. Edits made on the other host in the last ~10s
+# are not announced yet; that side's `psync wait` covers them.
+cmd_ready() {
+  local timeout=${1:-60} start=$SECONDS waited=0 settled=0 caught_up=0 db conns id
+  trap 'echo "psync: wait skipped" >&2; exit 0' INT
+  api GET system/ping >/dev/null 2>&1 || { echo "psync: Syncthing is not running here (psync resume)" >&2; return 0; }
+  [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == false ]] \
+    || { echo "psync: sync is paused on this host (psync resume)" >&2; return 0; }
+
+  while true; do
+    db=$(api GET "db/status?folder=$FOLDER_ID")
+    if [[ $(jq -r '.state + (.needTotalItems | tostring)' <<<"$db") == idle0 ]]; then
+      # After a wait, look once more: the next batch may be announced only now.
+      if ((waited == 0 || settled++ > 0)); then
+        caught_up=1
+        break
+      fi
+    else
+      settled=0
+      ((waited++ > 0)) || echo "psync: catching up with the other host (Ctrl-C skips)..." >&2
+    fi
+    if ((SECONDS - start >= timeout)); then
+      echo "psync: still syncing after ${timeout}s, continuing anyway (follow with: psync wait)" >&2
+      break
+    fi
+    sleep 2
+  done
+  ((waited > 0 && caught_up)) && echo "psync: caught up" >&2
+
+  conns=$(api GET system/connections)
+  for id in $(peers); do
+    [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] && continue
+    echo "psync: $(api GET "config/devices/$id" | jq -r .name) is offline (last seen $(last_seen "$id")), so what it has not sent yet is not here" >&2
+  done
+  backup_warning >&2
+  return 0
+}
+
+# --- Backups. Sync is not a backup: a deletion or a bad overwrite travels to the other host.
+# restic keeps point-in-time history of ~/projects (deduplicated and compressed). Opt-in per
+# host: `psync backup setup` creates the repository and enables the daily timer; the VPS runs it.
+
+restic_repo() {
+  RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD_FILE=$BACKUP_PASSWORD restic "$@"
+}
+
+backup_have_repo() { [[ -e $BACKUP_REPO/config ]]; }
+
+# One line when this host makes backups and the last one failed or is overdue.
+backup_warning() {
+  local state=$STATE_DIR/backup-last status when
+  [[ -r $state ]] || return 0
+  read -r status when <"$state"
+  if [[ $status != ok ]]; then
+    echo "psync: the last backup FAILED ($(cut -d' ' -f3- "$state")), see: psync backup status"
+  elif (($(date +%s) - when > BACKUP_STALE_AFTER)); then
+    echo "psync: no successful backup for over $((BACKUP_STALE_AFTER / 3600))h, see: psync backup status"
+  fi
+}
+
+backup_setup() {
+  command -v restic >/dev/null || die "restic is not installed"
+  mkdir -p "$STATE_DIR" "$BACKUP_REPO"
+  if [[ ! -s $BACKUP_PASSWORD ]]; then
+    (umask 077 && openssl rand -base64 33 >"$BACKUP_PASSWORD")
+    echo "created $BACKUP_PASSWORD: keep a copy somewhere safe, without it the snapshots cannot be opened"
+  fi
+  backup_have_repo || restic_repo init
+  systemctl --user enable --now psync-backup.timer
+}
+
+backup_run() {
+  local free_gb rc=0
+  backup_have_repo || die "no backup repository on this host (run: psync backup setup)"
+  mkdir -p "$STATE_DIR"
+  free_gb=$(($(df --output=avail -k "$BACKUP_REPO" | tail -1) / 1048576))
+  if ((free_gb < BACKUP_MIN_FREE_GB)); then
+    echo "fail $(date +%s) only ${free_gb}GB free, needs ${BACKUP_MIN_FREE_GB}GB" >"$STATE_DIR/backup-last"
+    die "only ${free_gb}GB free (< ${BACKUP_MIN_FREE_GB}GB): not taking a snapshot"
+  fi
+  restic_repo backup "$FOLDER_PATH" --exclude-file "$BACKUP_EXCLUDES" --one-file-system --tag psync || rc=$?
+  # Exit 3: some files changed or vanished while being read. The snapshot exists.
+  ((rc != 3)) || rc=0
+  ((rc != 0)) || restic_repo forget "${BACKUP_KEEP[@]}" --prune --tag psync || rc=$?
+  if ((rc == 0)); then
+    echo "ok $(date +%s)" >"$STATE_DIR/backup-last"
+  else
+    echo "fail $(date +%s) restic exited with $rc" >"$STATE_DIR/backup-last"
+  fi
+  return $rc
+}
+
+backup_status() {
+  backup_have_repo || die "no backup repository on this host (run: psync backup setup)"
+  restic_repo snapshots --compact
+  echo "repository: $(du -sh "$BACKUP_REPO" | cut -f1) used, $(df -h --output=avail "$BACKUP_REPO" | tail -1 | tr -d ' ') free on the disk"
+  if [[ -r $STATE_DIR/backup-last ]]; then
+    echo "last run:   $(cut -d' ' -f1 "$STATE_DIR/backup-last") at $(date -d "@$(cut -d' ' -f2 "$STATE_DIR/backup-last")" '+%F %T')"
+  fi
+  backup_warning || true
+}
+
+cmd_backup() {
+  case ${1:-run} in
+    run) backup_run ;;
+    status) backup_status ;;
+    setup) backup_setup ;;
+    restic) shift; backup_have_repo || die "no backup repository on this host"; restic_repo "$@" ;;
+    *) die "usage: psync backup [run|status|setup|restic ARGS...]" ;;
+  esac
+}
+
+cmd_check() {
+  local conflicts errors conns now msgs=()
+  # Stopped or paused on purpose (psync pause): nothing to warn about.
+  api GET system/ping >/dev/null 2>&1 || return 0
+  [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == false ]] || return 0
+  mkdir -p "$STATE_DIR"
+  now=$(date +%s)
+
+  settle_scan
+  park_index_conflicts
+  conflicts=$(conflict_files | wc -l)
+  if ((conflicts > 0)) && [[ $conflicts != "$(cat "$STATE_DIR/conflicts" 2>/dev/null)" ]]; then
+    msgs+=("$conflicts sync conflict(s) in ~/projects — run: psync conflicts")
+  fi
+  echo "$conflicts" >"$STATE_DIR/conflicts"
+
+  errors=$(api GET "folder/errors?folder=$FOLDER_ID" | jq '.errors // [] | length')
+  ((errors == 0)) || msgs+=("$errors folder error(s) in ~/projects — run: psync status")
+
+  conns=$(api GET system/connections)
+  for id in $(peers); do
+    if [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]]; then
+      rm -f "$STATE_DIR/down-$id" "$STATE_DIR/warned-$id"
+      continue
+    fi
+    [[ -e $STATE_DIR/down-$id ]] || echo "$now" >"$STATE_DIR/down-$id"
+    if ((now - $(cat "$STATE_DIR/down-$id") > DISCONNECT_WARN_AFTER)) && [[ ! -e $STATE_DIR/warned-$id ]]; then
+      msgs+=("$(api GET "config/devices/$id" | jq -r .name) has been disconnected for over an hour")
+      touch "$STATE_DIR/warned-$id"
+    fi
+  done
+
+  for msg in "${msgs[@]}"; do
+    echo "$msg" >&2
+    if command -v notify-send >/dev/null; then notify-send -u critical psync "$msg" || true; fi
+  done
+}
+
+# --- doctor: one pass over everything psync depends on, for after any change (a config or ignore
+# edit, an upgrade, a reinstall, a new host). ok = fine, warn = worth a look, FAIL = broken;
+# only FAIL makes the exit code 1. The warnings are conditions that come and go (a peer asleep,
+# edits still travelling), FAILs are things that stay broken until someone fixes them.
+
+doctor_fails=0
+doctor_warns=0
+d_ok() { printf '  ok    %s\n' "$*"; }
+d_warn() { printf '  warn  %s\n' "$*"; doctor_warns=$((doctor_warns + 1)); }
+d_fail() { printf '  FAIL  %s\n' "$*"; doctor_fails=$((doctor_fails + 1)); }
+
+# Writes a canary under ~/projects and waits until every peer reports having it: the one check
+# that covers scan, announce, transfer and the ignore rules together.
+doctor_roundtrip() {
+  local canary=$FOLDER_PATH/.psync-canary-$(uname -n)-$$ start=$SECONDS id pending=() connected=0 conns
+  conns=$(api GET system/connections)
+  for id in $(peers); do
+    [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] || continue
+    pending+=("$id")
+    connected=1
+  done
+  ((connected)) || { d_fail "roundtrip: no peer is connected, nothing to send the canary to"; return; }
+
+  date +%s >"$canary"
+  while ((${#pending[@]} > 0 && SECONDS - start < ROUNDTRIP_TIMEOUT)); do
+    sleep 2
+    local still=()
+    for id in "${pending[@]}"; do
+      api GET "db/file?folder=$FOLDER_ID&file=${canary##*/}" 2>/dev/null |
+        jq -e --arg id "$id" '.availability // [] | any(.id == $id)' >/dev/null 2>&1 || still+=("$id")
+    done
+    pending=("${still[@]}")
+  done
+  rm -f -- "$canary"
+  if ((${#pending[@]} == 0)); then
+    d_ok "roundtrip: a canary file reached every connected peer in $((SECONDS - start))s"
+  else
+    d_fail "roundtrip: the canary did not reach $(api GET "config/devices/${pending[0]}" | jq -r .name) within ${ROUNDTRIP_TIMEOUT}s"
+  fi
+}
+
+cmd_doctor() {
+  local roundtrip=false out unit n free_gb ts state expiry days w down=()
+  [[ ${1-} != --roundtrip ]] || roundtrip=true
+  doctor_fails=0 doctor_warns=0
+  echo "psync doctor ($(uname -n))"
+
+  if ! api GET system/ping >/dev/null 2>&1; then
+    d_fail "Syncthing is not running (psync resume)"
+    echo "result: $doctor_fails problem(s)"
+    return 1
+  fi
+  d_ok "Syncthing $(api GET system/version | jq -r .version) is running"
+
+  if [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == true ]]; then
+    d_fail "folder $FOLDER_ID is paused on this host (psync resume)"
+  elif out=$(report); then
+    d_ok "in sync with every peer"
+  else
+    d_warn "not fully in sync (normal right after an edit or while a peer is offline):"
+    sed 's/^/            /' <<<"$out"
+  fi
+
+  n=$(conflict_files | wc -l)
+  if ((n == 0)); then d_ok "no sync conflicts"; else d_warn "$n sync conflict(s) (psync conflicts)"; fi
+
+  if [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "#include $IGNORE_INCLUDE" && -r $FOLDER_PATH/$IGNORE_INCLUDE ]]; then
+    d_ok "ignore rules: ~/projects/.stignore includes $IGNORE_INCLUDE"
+  else
+    d_fail "ignore rules: ~/projects/.stignore does not include $IGNORE_INCLUDE (psync setup)"
+  fi
+
+  local units=(syncthing.service psync-check.timer)
+  ! backup_have_repo || units+=(psync-backup.timer)
+  for unit in "${units[@]}"; do
+    systemctl --user is-active --quiet "$unit" && systemctl --user is-enabled --quiet "$unit" || down+=("$unit")
+  done
+  if ((${#down[@]} == 0)); then d_ok "enabled and active: ${units[*]}"; else d_fail "not enabled or not active: ${down[*]}"; fi
+
+  if backup_have_repo; then
+    w=$(backup_warning)
+    if [[ -n $w ]]; then
+      d_fail "${w#psync: }"
+    elif [[ -r $STATE_DIR/backup-last ]]; then
+      d_ok "backup: last run ok at $(date -d "@$(cut -d' ' -f2 "$STATE_DIR/backup-last")" '+%F %T')"
+    else
+      d_warn "backup: repository exists but no run recorded yet (psync backup)"
+    fi
+  fi
+
+  free_gb=$(($(df --output=avail -k "$FOLDER_PATH" | tail -1) / 1048576))
+  if ((free_gb < DISK_WARN_GB)); then d_warn "disk: only ${free_gb}GB free where ~/projects lives"; else d_ok "disk: ${free_gb}GB free where ~/projects lives"; fi
+
+  if command -v tailscale >/dev/null; then
+    ts=$(timeout 10 tailscale status --json 2>/dev/null || true)
+    state=$(jq -r '.BackendState // "unknown"' <<<"${ts:-null}")
+    expiry=$(jq -r '.Self.KeyExpiry // ""' <<<"${ts:-null}")
+    if [[ $state != Running ]]; then
+      d_fail "tailscale is $state, the other host cannot be reached"
+    elif [[ -z $expiry ]]; then
+      d_ok "tailscale running, this node's key does not expire"
+    else
+      days=$((($(date -d "$expiry" +%s) - $(date +%s)) / 86400))
+      if ((days <= KEY_FAIL_DAYS)); then
+        d_fail "tailscale node key expires in ${days} days (${expiry%%T*}): disable key expiry in the admin console"
+      elif ((days <= KEY_WARN_DAYS)); then
+        d_warn "tailscale node key expires in ${days} days (${expiry%%T*}): disable key expiry in the admin console"
+      else
+        d_ok "tailscale running, node key valid until ${expiry%%T*}"
+      fi
+    fi
+  fi
+
+  if grep -qs 'psync ready' "$HOME/.zshrc"; then
+    d_ok "switching hosts waits for pending changes (psync ready in ~/.zshrc)"
+  else
+    d_warn "no 'psync ready' in ~/.zshrc: the next host switch will not wait for pending changes"
+  fi
+  if [[ -f $HOME/.local/bin/ai && ! -L $HOME/.local/bin/ai ]] && ! grep -qs 'psync' "$HOME/.local/bin/ai"; then
+    d_warn "~/.local/bin/ai does not call psync ready"
+  fi
+
+  if [[ -e /etc/systemd/system/psync-ssh-guard.timer ]]; then
+    if systemctl is-active --quiet psync-ssh-guard.timer; then
+      d_ok "public SSH guard timer is active"
+    else
+      d_fail "psync-ssh-guard.timer is not active: a Tailscale outage would lock you out"
+    fi
+  fi
+
+  ! $roundtrip || doctor_roundtrip
+  if ((doctor_fails > 0)); then
+    echo "result: $doctor_fails problem(s)"
+    return 1
+  elif ((doctor_warns > 0)); then
+    echo "result: no failures, $doctor_warns warning(s)"
+  else
+    echo "result: all good"
+  fi
+}
+
+cmd_setup() {
+  local peer_id="" peer_name="" peer_address=dynamic listen="tcp://:22000"
+  while (($#)); do
+    case $1 in
+      --peer-id) peer_id=$2; shift 2 ;;
+      --peer-name) peer_name=$2; shift 2 ;;
+      --peer-address) peer_address=$2; shift 2 ;;
+      --listen) listen=$2; shift 2 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+
+  mkdir -p "$FOLDER_PATH"
+  [[ -r $FOLDER_PATH/$IGNORE_INCLUDE ]] ||
+    die "missing $FOLDER_PATH/$IGNORE_INCLUDE — copy it from another host before the first sync"
+  local stignore="#include $IGNORE_INCLUDE"
+  if [[ "$(cat "$FOLDER_PATH/.stignore" 2>/dev/null)" != "$stignore" ]]; then
+    [[ ! -e $FOLDER_PATH/.stignore ]] || cp "$FOLDER_PATH/.stignore" "$FOLDER_PATH/.stignore.bak"
+    echo "$stignore" >"$FOLDER_PATH/.stignore"
+  fi
+
+  [[ -r $ST_HOME/config.xml ]] || syncthing generate --home="$ST_HOME" --no-port-probing >/dev/null
+  systemctl --user enable --now syncthing.service
+  local up=false
+  for _ in $(seq 30); do
+    if api GET system/ping >/dev/null 2>&1; then up=true; break; fi
+    sleep 1
+  done
+  $up || die "Syncthing API did not come up (journalctl --user -u syncthing)"
+
+  api PATCH config/options "$(jq -n --arg listen "$listen" '{
+    listenAddresses: [$listen],
+    globalAnnounceEnabled: false, localAnnounceEnabled: false,
+    relaysEnabled: false, natEnabled: false,
+    urAccepted: -1, crashReportingEnabled: false, autoUpgradeIntervalH: 0
+  }')" >/dev/null
+  api DELETE config/folders/default >/dev/null 2>&1 || true
+
+  local devices existing folder
+  devices=$(jq -n --arg me "$(my_id)" '[{deviceID: $me}]')
+  if [[ -n $peer_id ]]; then
+    api PUT "config/devices/$peer_id" "$(jq -n --arg id "$peer_id" --arg name "${peer_name:-$peer_id}" \
+      --arg addr "$peer_address" \
+      '{deviceID: $id, name: $name, addresses: [$addr], compression: "metadata", autoAcceptFolders: false}')" >/dev/null
+    devices=$(jq --arg id "$peer_id" '. + [{deviceID: $id}]' <<<"$devices")
+  fi
+  if existing=$(api GET "config/folders/$FOLDER_ID" 2>/dev/null); then
+    devices=$(jq --argjson new "$devices" '.devices + $new | unique_by(.deviceID)' <<<"$existing")
+  fi
+
+  folder=$(api GET config/defaults/folder | jq --arg id "$FOLDER_ID" --arg path "$FOLDER_PATH" \
+    --argjson devices "$devices" --arg maxAge "$VERSIONS_MAX_AGE" '. + {
+      id: $id, label: $id, path: $path, type: "sendreceive", devices: $devices,
+      order: "oldestFirst", fsWatcherEnabled: true, rescanIntervalS: 86400, maxConflicts: 10,
+      versioning: (.versioning + {type: "staggered", params: {maxAge: $maxAge}, cleanupIntervalS: 3600})
+    }')
+  api PUT "config/folders/$FOLDER_ID" "$folder" >/dev/null
+
+  # Headless hosts have no notify-send: the timer still runs the settle scan and tidy-up.
+  systemctl --user enable --now psync-check.timer
+  echo "This device: $(my_id)"
+}
+
+case ${1:-status} in
+  status) cmd_status ;;
+  wait) shift; cmd_wait "$@" ;;
+  ready) shift; cmd_ready "$@" ;;
+  backup) shift; cmd_backup "$@" ;;
+  conflicts) conflict_files ;;
+  pause) api PATCH "config/folders/$FOLDER_ID" '{"paused": true}' >/dev/null && echo "paused — resume with: psync resume" ;;
+  resume)
+    systemctl --user start syncthing.service
+    for _ in $(seq 30); do api GET system/ping >/dev/null 2>&1 && break; sleep 1; done
+    api PATCH "config/folders/$FOLDER_ID" '{"paused": false}' >/dev/null && echo "resumed — follow with: psync status"
+    ;;
+  check) cmd_check ;;
+  doctor) shift; cmd_doctor "$@" ;;
+  tidy) park_index_conflicts ;;
+  setup) shift; cmd_setup "$@" ;;
+  -h | --help | help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown command: $1 (see psync --help)" ;;
+esac

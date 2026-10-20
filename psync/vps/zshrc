@@ -1,0 +1,13 @@
+# Minimal VPS shell for jo; the PC's dotfiles zsh setup depends on Arch-only tools.
+export PATH="$HOME/.local/bin:$PATH"
+HISTFILE=~/.zsh_history HISTSIZE=50000 SAVEHIST=50000
+setopt share_history hist_ignore_dups
+autoload -Uz compinit && compinit
+PROMPT='%F{cyan}%n@vps%f %F{blue}%~%f %# '
+
+# On an SSH login, let what the PC already sent arrive before work starts (instant when synced).
+# Skipped inside tmux and in nested shells.
+if [[ -o interactive && -n $SSH_CONNECTION && -z $TMUX && -z $PSYNC_READY_DONE ]]; then
+  export PSYNC_READY_DONE=1
+  psync ready
+fi

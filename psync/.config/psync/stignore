@@ -1,0 +1,98 @@
+// psync — Syncthing ignore patterns for ~/projects, shared by every host.
+// Included from ~/projects/.stignore, so edits here reach all hosts on their own.
+// Unrooted patterns match at any depth. (?d) lets Syncthing delete these when
+// their parent directory is removed on another host.
+// Rule: anything git TRACKS must sync (otherwise it shows as deleted on the other
+// host). Ignoring a directory's children (dir/*) plus a leading "!" exception keeps
+// such files; exceptions must come before the pattern they carve out of.
+
+// --- Dependencies, build outputs and caches: native per host/arch, rebuilt locally
+(?d)node_modules
+(?d).venv
+(?d)venv
+(?d)__pycache__
+(?d).mypy_cache
+(?d).pytest_cache
+(?d).ruff_cache
+(?d).tox
+(?d).cache
+(?d).gradle
+(?d).cxx
+(?d).terraform
+(?d).next
+(?d).turbo
+(?d)target
+(?d)android/build
+(?d)android/app/build
+(?d)ios/build
+(?d)ios/Pods
+
+// --- Git: lock files must never travel, or the other host thinks git is running
+.git/**.lock
+.git/gc.pid
+
+// --- SQLite companions: only meaningful to the process that has the DB open
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.db-wal
+*.db-shm
+*.db-journal
+
+// --- Claude Code (CLAUDE_CONFIG_DIR = agents/<key>/claude): login and live
+// process state stay per host; sessions, memory, todos and file history sync.
+.credentials.json
+.claude.json
+.claude.json.*
+claude/history.jsonl
+claude/sessions
+claude/session-env
+claude/shell-snapshots
+claude/daemon
+claude/daemon.*
+claude/jobs
+!claude/plugins/installed_plugins.json
+claude/plugins/*
+claude/backups
+claude/cache
+claude/statsig
+claude/telemetry
+claude/debug
+claude/ide
+claude/.last-cleanup
+
+// --- Codex (CODEX_HOME = agents/<key>/codex): rollouts in sessions/ sync;
+// login, SQLite state, native packages and runtime files stay per host.
+codex/auth.json
+codex/*.sqlite*
+codex/.sqlite-maintenance.lock
+codex/history.jsonl
+codex/installation_id
+codex/version.json
+codex/models_cache.json
+codex/packages
+codex/log
+codex/tmp
+codex/.tmp
+codex/cache
+codex/shell_snapshots
+codex/thread-writer-locks
+!codex/app-server-control/app-server-startup.lock
+codex/app-server-control/*
+codex/app-server-daemon
+
+// --- Copies of agent logins kept in test fixtures (e.g. skill-lab runs: home/.codex/auth.json)
+.codex/auth.json
+
+// --- Claude prompt history kept directly under an agent dir (agents/<key>/history.jsonl)
+agents/*/history.jsonl
+
+// --- Other per-host agent runtime databases and project runtime state (gitignored by their projects)
+!agents/**/agent-mem/.gitignore
+!agents/**/agent-mem/settings.json
+agents/**/agent-mem/*
+headroom/runtime
+.runtime

@@ -1,0 +1,10 @@
+# Files of this package that are not part of $HOME (stow would link them next to the dotfiles).
+^/tests$
+^/vps$
+^/RUNBOOK\.md$
+
+# Stow's own defaults, which a custom list replaces.
+\.git
+\.gitignore
+^/README.*
+^/LICENSE.*

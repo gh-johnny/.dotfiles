@@ -19,6 +19,7 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `lazygit` | `~/.config/lazygit/` |
 | `mako` | `~/.config/mako/config` |
 | `nvim` | `~/.config/nvim/` |
+| `psync` | `~/.local/bin/psync`, `~/.config/psync/`, `~/.config/systemd/user/psync-*` (`tests/`, `vps/` and `RUNBOOK.md` stay in the repo, see `.stow-local-ignore`) |
 | `ssh` | `~/.ssh/config` |
 | `starship` | `~/.config/starship.toml` |
 | `tmux` | `~/.tmux.conf` |

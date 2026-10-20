@@ -1,0 +1,7 @@
+[Unit]
+Description=psync: warn about sync conflicts, errors and long disconnections
+After=syncthing.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/psync check

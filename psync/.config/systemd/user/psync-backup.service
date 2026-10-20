@@ -1,0 +1,9 @@
+[Unit]
+Description=psync: snapshot ~/projects with restic
+ConditionPathExists=%h/.local/share/psync-backup/repo/config
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/psync backup run
+Nice=19
+IOSchedulingClass=idle
