@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# VPS launcher: run the real script so it resolves its repo root (symlinks break that).
+# psync ready: let what the PC already sent arrive first (instant when synced, never fails).
+"$HOME/.local/bin/psync" ready || true
+exec "$HOME/projects/ai-agents/scripts/launch-agent.sh" "$@"

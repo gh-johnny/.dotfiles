@@ -1,0 +1,6 @@
+[Unit]
+Description=psync: keep public SSH closed while Tailscale is healthy
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/psync-ssh-guard

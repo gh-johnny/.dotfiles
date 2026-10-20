@@ -132,7 +132,13 @@ psync ready       # the other direction: wait briefly until THIS host has caught
 psync conflicts   # list *.sync-conflict-* files
 psync pause       # stop syncing on this host (stays paused across reboots)
 psync resume      # start again, picks up where it stopped
+psync doctor      # health check of this host (--roundtrip also sends a canary file to the peers)
 ```
+
+Run `psync doctor --roundtrip` on both hosts after changing anything psync-related, and
+`bash psync/tests/run.sh` (about 45 checks against a fake Syncthing, no side effects). What to do
+when something looks wrong, how to recover data, and how to rebuild either host:
+[`psync/RUNBOOK.md`](psync/RUNBOOK.md).
 
 On the PC a user timer (`psync-check.timer`) raises a desktop notification for
 new conflicts, folder errors or a peer disconnected for over an hour.
@@ -200,6 +206,9 @@ firewall. Use `ssh jo@100.90.235.90` (Tailscale SSH, re-approved in the browser 
 way back in: if Tailscale is not `Running` for 5 minutes (stopped, node key expired) it reopens
 `tcp/22`, and it closes it again once Tailscale is back. The Tailscale node key of the VPS
 expires on 2027-04-04: turn key expiry off for that machine in the Tailscale admin console.
+
+The guard, its units and the VPS shell hook are kept in `psync/vps/` (`install.sh user` / `sudo
+install.sh root` put them back on a rebuilt VPS; stow does not link that directory).
 
 Undo it: `sudo systemctl disable --now psync-ssh-guard.timer` and
 `sudo iptables -I INPUT 1 -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT`. The

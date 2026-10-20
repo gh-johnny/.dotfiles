@@ -1,0 +1,18 @@
+#!/bin/sh
+# Public SSH (tcp/22) stays closed while Tailscale is healthy, so the tailnet is the only way in.
+# If Tailscale stays down for 5 minutes (stopped, key expired, ...) the port is reopened as a way
+# back in, and closed again once Tailscale runs. Run every minute by psync-ssh-guard.timer.
+DOWN=${PSYNC_GUARD_DOWN:-/run/psync-ssh-guard.down}
+RULE="-p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT"
+
+if [ "$(timeout 10 tailscale status --json 2>/dev/null | jq -r .BackendState 2>/dev/null)" = Running ]; then
+  rm -f "$DOWN"
+  while iptables -C INPUT $RULE 2>/dev/null; do iptables -D INPUT $RULE; done
+  exit 0
+fi
+
+[ -e "$DOWN" ] || date +%s >"$DOWN"
+if [ $(($(date +%s) - $(cat "$DOWN"))) -ge 300 ]; then
+  iptables -C INPUT $RULE 2>/dev/null || iptables -I INPUT 1 $RULE
+  logger -t psync-ssh-guard "Tailscale is down: public SSH reopened"
+fi

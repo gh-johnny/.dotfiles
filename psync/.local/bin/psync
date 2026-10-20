@@ -10,6 +10,7 @@
 #   psync resume        continue where it stopped
 #   psync tidy          park git-index conflict copies outside the synced tree
 #   psync check         tidy, then notify about conflicts, errors or a long disconnection (timer)
+#   psync doctor [--roundtrip]   health check of this host, for after any change; --roundtrip also sends a canary file through
 #   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR]
 #
 # Thin wrapper over the local Syncthing REST API. Every host runs the same setup;
@@ -31,6 +32,10 @@ BACKUP_EXCLUDES="$HOME/.config/psync/backup-excludes"
 BACKUP_MIN_FREE_GB=30
 BACKUP_KEEP=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
 BACKUP_STALE_AFTER=$((36 * 3600))
+DISK_WARN_GB=${PSYNC_DISK_WARN_GB:-20}
+ROUNDTRIP_TIMEOUT=${PSYNC_ROUNDTRIP_TIMEOUT:-90}
+KEY_WARN_DAYS=120
+KEY_FAIL_DAYS=30
 
 die() { echo "psync: $*" >&2; exit 1; }
 
@@ -311,6 +316,147 @@ cmd_check() {
   done
 }
 
+# --- doctor: one pass over everything psync depends on, for after any change (a config or ignore
+# edit, an upgrade, a reinstall, a new host). ok = fine, warn = worth a look, FAIL = broken;
+# only FAIL makes the exit code 1. The warnings are conditions that come and go (a peer asleep,
+# edits still travelling), FAILs are things that stay broken until someone fixes them.
+
+doctor_fails=0
+doctor_warns=0
+d_ok() { printf '  ok    %s\n' "$*"; }
+d_warn() { printf '  warn  %s\n' "$*"; doctor_warns=$((doctor_warns + 1)); }
+d_fail() { printf '  FAIL  %s\n' "$*"; doctor_fails=$((doctor_fails + 1)); }
+
+# Writes a canary under ~/projects and waits until every peer reports having it: the one check
+# that covers scan, announce, transfer and the ignore rules together.
+doctor_roundtrip() {
+  local canary=$FOLDER_PATH/.psync-canary-$(uname -n)-$$ start=$SECONDS id pending=() connected=0 conns
+  conns=$(api GET system/connections)
+  for id in $(peers); do
+    [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] || continue
+    pending+=("$id")
+    connected=1
+  done
+  ((connected)) || { d_fail "roundtrip: no peer is connected, nothing to send the canary to"; return; }
+
+  date +%s >"$canary"
+  while ((${#pending[@]} > 0 && SECONDS - start < ROUNDTRIP_TIMEOUT)); do
+    sleep 2
+    local still=()
+    for id in "${pending[@]}"; do
+      api GET "db/file?folder=$FOLDER_ID&file=${canary##*/}" 2>/dev/null |
+        jq -e --arg id "$id" '.availability // [] | any(.id == $id)' >/dev/null 2>&1 || still+=("$id")
+    done
+    pending=("${still[@]}")
+  done
+  rm -f -- "$canary"
+  if ((${#pending[@]} == 0)); then
+    d_ok "roundtrip: a canary file reached every connected peer in $((SECONDS - start))s"
+  else
+    d_fail "roundtrip: the canary did not reach $(api GET "config/devices/${pending[0]}" | jq -r .name) within ${ROUNDTRIP_TIMEOUT}s"
+  fi
+}
+
+cmd_doctor() {
+  local roundtrip=false out unit n free_gb ts state expiry days w down=()
+  [[ ${1-} != --roundtrip ]] || roundtrip=true
+  doctor_fails=0 doctor_warns=0
+  echo "psync doctor ($(uname -n))"
+
+  if ! api GET system/ping >/dev/null 2>&1; then
+    d_fail "Syncthing is not running (psync resume)"
+    echo "result: $doctor_fails problem(s)"
+    return 1
+  fi
+  d_ok "Syncthing $(api GET system/version | jq -r .version) is running"
+
+  if [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == true ]]; then
+    d_fail "folder $FOLDER_ID is paused on this host (psync resume)"
+  elif out=$(report); then
+    d_ok "in sync with every peer"
+  else
+    d_warn "not fully in sync (normal right after an edit or while a peer is offline):"
+    sed 's/^/            /' <<<"$out"
+  fi
+
+  n=$(conflict_files | wc -l)
+  if ((n == 0)); then d_ok "no sync conflicts"; else d_warn "$n sync conflict(s) (psync conflicts)"; fi
+
+  if [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "#include $IGNORE_INCLUDE" && -r $FOLDER_PATH/$IGNORE_INCLUDE ]]; then
+    d_ok "ignore rules: ~/projects/.stignore includes $IGNORE_INCLUDE"
+  else
+    d_fail "ignore rules: ~/projects/.stignore does not include $IGNORE_INCLUDE (psync setup)"
+  fi
+
+  local units=(syncthing.service psync-check.timer)
+  ! backup_have_repo || units+=(psync-backup.timer)
+  for unit in "${units[@]}"; do
+    systemctl --user is-active --quiet "$unit" && systemctl --user is-enabled --quiet "$unit" || down+=("$unit")
+  done
+  if ((${#down[@]} == 0)); then d_ok "enabled and active: ${units[*]}"; else d_fail "not enabled or not active: ${down[*]}"; fi
+
+  if backup_have_repo; then
+    w=$(backup_warning)
+    if [[ -n $w ]]; then
+      d_fail "${w#psync: }"
+    elif [[ -r $STATE_DIR/backup-last ]]; then
+      d_ok "backup: last run ok at $(date -d "@$(cut -d' ' -f2 "$STATE_DIR/backup-last")" '+%F %T')"
+    else
+      d_warn "backup: repository exists but no run recorded yet (psync backup)"
+    fi
+  fi
+
+  free_gb=$(($(df --output=avail -k "$FOLDER_PATH" | tail -1) / 1048576))
+  if ((free_gb < DISK_WARN_GB)); then d_warn "disk: only ${free_gb}GB free where ~/projects lives"; else d_ok "disk: ${free_gb}GB free where ~/projects lives"; fi
+
+  if command -v tailscale >/dev/null; then
+    ts=$(timeout 10 tailscale status --json 2>/dev/null || true)
+    state=$(jq -r '.BackendState // "unknown"' <<<"${ts:-null}")
+    expiry=$(jq -r '.Self.KeyExpiry // ""' <<<"${ts:-null}")
+    if [[ $state != Running ]]; then
+      d_fail "tailscale is $state, the other host cannot be reached"
+    elif [[ -z $expiry ]]; then
+      d_ok "tailscale running, this node's key does not expire"
+    else
+      days=$((($(date -d "$expiry" +%s) - $(date +%s)) / 86400))
+      if ((days <= KEY_FAIL_DAYS)); then
+        d_fail "tailscale node key expires in ${days} days (${expiry%%T*}): disable key expiry in the admin console"
+      elif ((days <= KEY_WARN_DAYS)); then
+        d_warn "tailscale node key expires in ${days} days (${expiry%%T*}): disable key expiry in the admin console"
+      else
+        d_ok "tailscale running, node key valid until ${expiry%%T*}"
+      fi
+    fi
+  fi
+
+  if grep -qs 'psync ready' "$HOME/.zshrc"; then
+    d_ok "switching hosts waits for pending changes (psync ready in ~/.zshrc)"
+  else
+    d_warn "no 'psync ready' in ~/.zshrc: the next host switch will not wait for pending changes"
+  fi
+  if [[ -f $HOME/.local/bin/ai && ! -L $HOME/.local/bin/ai ]] && ! grep -qs 'psync' "$HOME/.local/bin/ai"; then
+    d_warn "~/.local/bin/ai does not call psync ready"
+  fi
+
+  if [[ -e /etc/systemd/system/psync-ssh-guard.timer ]]; then
+    if systemctl is-active --quiet psync-ssh-guard.timer; then
+      d_ok "public SSH guard timer is active"
+    else
+      d_fail "psync-ssh-guard.timer is not active: a Tailscale outage would lock you out"
+    fi
+  fi
+
+  ! $roundtrip || doctor_roundtrip
+  if ((doctor_fails > 0)); then
+    echo "result: $doctor_fails problem(s)"
+    return 1
+  elif ((doctor_warns > 0)); then
+    echo "result: no failures, $doctor_warns warning(s)"
+  else
+    echo "result: all good"
+  fi
+}
+
 cmd_setup() {
   local peer_id="" peer_name="" peer_address=dynamic listen="tcp://:22000"
   while (($#)); do
@@ -387,8 +533,9 @@ case ${1:-status} in
     api PATCH "config/folders/$FOLDER_ID" '{"paused": false}' >/dev/null && echo "resumed — follow with: psync status"
     ;;
   check) cmd_check ;;
+  doctor) shift; cmd_doctor "$@" ;;
   tidy) park_index_conflicts ;;
   setup) shift; cmd_setup "$@" ;;
-  -h | --help | help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (see psync --help)" ;;
 esac
