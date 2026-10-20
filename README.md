@@ -151,6 +151,15 @@ writing the same file produce a `*.sync-conflict-*` copy (nothing is lost; the
 newer edit wins). Files replaced or deleted by the other host are kept for 30 days
 in `~/projects/.stversions`.
 
+**Switching hosts inside one repo:** run `psync wait` first. A commit's refs can arrive
+a few seconds before its objects and `.git/index` after both, and running git on the
+other host in that window (even `git status`, which rewrites the index) makes an older
+index win the sync. The result is only a stale index, never lost commits: fix it with
+`git read-tree HEAD` (index only, working tree untouched) once `psync status` says in
+sync. `psync check` parks the losing `index.sync-conflict-*` copies automatically.
+After every Syncthing (re)start `psync check` requests one extra full rescan, because
+edits made during the startup scan are not seen by the filesystem watcher.
+
 The git package sets `core.checkStat=minimal`, `core.trustctime=false` and
 `gc.worktreePruneExpire=never` so synced indexes stay valid and no host prunes
 another host's worktrees.

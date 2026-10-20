@@ -67,6 +67,20 @@ park_index_conflicts() {
   find "$dest" -type f -mtime +7 -delete 2>/dev/null || true
 }
 
+# Edits made while Syncthing's startup scan runs are never reported by the filesystem
+# watcher and would wait for the next scheduled full rescan (a day). So once per
+# Syncthing start, as soon as the startup scan is over, request one more full scan.
+settle_scan() {
+  local started
+  started=$(api GET system/status | jq -r .startTime)
+  [[ $(cat "$STATE_DIR/settled-start" 2>/dev/null) != "$started" ]] || return 0
+  [[ $(api GET "db/status?folder=$FOLDER_ID" | jq -r .state) == idle ]] || return 0
+  echo "$started" >"$STATE_DIR/settled-start"
+  # The call returns only when the scan ends; the request itself is queued at once.
+  api POST "db/scan?folder=$FOLDER_ID" >/dev/null 2>&1 &
+  sleep 1
+}
+
 # Prints folder, peer and error lines; returns 0 only when nothing is pending anywhere.
 report() {
   local db conns stats errors rc=0
@@ -136,6 +150,7 @@ cmd_check() {
   mkdir -p "$STATE_DIR"
   now=$(date +%s)
 
+  settle_scan
   park_index_conflicts
   conflicts=$(conflict_files | wc -l)
   if ((conflicts > 0)) && [[ $conflicts != "$(cat "$STATE_DIR/conflicts" 2>/dev/null)" ]]; then
@@ -223,7 +238,8 @@ cmd_setup() {
     }')
   api PUT "config/folders/$FOLDER_ID" "$folder" >/dev/null
 
-  if command -v notify-send >/dev/null; then systemctl --user enable --now psync-check.timer; fi
+  # Headless hosts have no notify-send: the timer still runs the settle scan and tidy-up.
+  systemctl --user enable --now psync-check.timer
   echo "This device: $(my_id)"
 }
 
