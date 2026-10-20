@@ -65,11 +65,17 @@ it the snapshots cannot be opened, and there is no recovery: start a new reposit
 1. Normal way in: `ssh jo@<vps tailscale address>` (Tailscale SSH, approval every 12h).
 2. If Tailscale is down on the VPS for 5 minutes, `psync-ssh-guard` reopens public `tcp/22`
    (`journalctl -t psync-ssh-guard`). `jo` has no `authorized_keys` there, so go in as `ubuntu`
-   (key in `/home/ubuntu/.ssh/authorized_keys`, never delete it) and `sudo -iu jo`. Fix Tailscale
-   (`sudo tailscale up`), and the guard closes the port again within a minute.
-3. The guard logic is covered by `tests/run.sh` with a fake `tailscale` and a fake firewall. It has
-   not been exercised in a real Tailscale outage, and getting in through the OCI console
-   (`ubuntu` has no password) is unproven.
+   (key in `/home/ubuntu/.ssh/authorized_keys`, never delete it) and `sudo -iu jo`:
+   `ssh -i ~/.ssh/vps-oracle ubuntu@<public address from the OCI console>`. That key has a
+   passphrase, so load it first with `ssh-add ~/.ssh/vps-oracle` in a real terminal; without it the
+   emergency door is shut. Bring Tailscale back (`sudo systemctl start tailscaled`, or
+   `sudo tailscale up` if it asks to log in) and the guard closes the port again within a minute.
+3. Exercised for real on 2026-10-20: `systemctl stop tailscaled` on the VPS, the port opened 7 min
+   after the drop, the `ubuntu` login worked with the host key pinned, and after
+   `systemctl start tailscaled` the guard closed the port within 10s and Tailscale SSH worked again
+   without a new approval (the OCI Security List lets tcp/22 through). `tests/run.sh` also covers the
+   guard logic with a fake `tailscale` and firewall. Still unproven: getting in through the OCI
+   console (`ubuntu` has no password).
 
 ## Rebuild the VPS from nothing
 
