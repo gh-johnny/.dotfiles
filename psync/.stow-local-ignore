@@ -1,6 +1,7 @@
 # Files of this package that are not part of $HOME (stow would link them next to the dotfiles).
 ^/tests$
 ^/vps$
+^/install\.sh$
 ^/RUNBOOK\.md$
 
 # Stow's own defaults, which a custom list replaces.

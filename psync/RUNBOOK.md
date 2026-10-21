@@ -11,14 +11,20 @@ that syncs). Both are on the tailnet and both keep a full copy of `~/projects`.
 |---|---|
 | leaving a host for the other | `psync wait` (the one manual step) |
 | arriving on a host | nothing: `psync ready` runs by itself in the `ai` launcher and at SSH login |
-| changed anything psync-related | `bash ~/projects/dotfiles/psync/tests/run.sh`, then `psync doctor --roundtrip` on **both** hosts |
+| changed anything psync-related | `bash ~/projects/dotfiles/psync/tests/run.sh` (and `tests/mesh.sh` if it touches pairing or hosts), then `psync doctor --roundtrip` on **every** host |
+| want to see who is in the mesh | `psync hosts` |
+| adding, replacing or removing a host | "Adding or replacing a host" below |
+| want Claude or Codex sessions (or any other directory) on the other host too | "Syncing more folders" below |
 | curious whether all is well | `psync doctor` (read-only, instant) |
 
 `psync doctor` prints `ok` / `warn` / `FAIL` per check and exits 1 only on FAIL. A warn is something
 that comes and goes (a peer asleep, edits still travelling) or a date to act on; a FAIL stays broken
-until someone fixes it. `--roundtrip` also writes a canary file under `~/projects` and waits (up to
-90s) until every peer reports having it, which covers scan, announce, transfer and the ignore rules
-in one go. It is removed afterwards.
+until someone fixes it. `--roundtrip` also writes a canary file in every synced folder and waits (up to
+90s per folder) until every connected peer that has the folder reports having it, which covers scan,
+announce, transfer and the ignore rules in one go. It is removed afterwards.
+
+Every command acts on all the folders the host syncs (`psync folders`). With more than one, the lines
+of `status` and `doctor` start with `[folder]`; with one they look as they always did.
 
 ## Something looks wrong
 
@@ -30,6 +36,7 @@ in one go. It is removed afterwards.
 | `git`: bad object, missing commit, or an old index right after switching hosts | refs can arrive before their objects, and `.git/index` after both; running git on the other host in that window (even `git status`) makes the old index win | stop touching git, `psync wait`, then `git read-tree HEAD` if the index is stale (index only, working tree untouched). Never lost commits |
 | `psync check` parked a git index conflict | two hosts ran `git status` in one repo at once | nothing; copies sit in `~/.local/state/psync/index-conflicts` for 7 days |
 | `folder error(s)` in status | Syncthing could not read or write something | `journalctl --user -u syncthing -n 50` |
+| `[claude] pc connected, but has not added this folder` | sharing a folder is opt-in on each host and that host has not run `psync folder add` for it. Not an error: nothing is waiting for it, doctor only warns | run the same `psync folder add` there, or `psync folder remove` here if you do not want it |
 | `psync ready` prints "last backup FAILED" or "no successful backup for over 36h" | the VPS timer failed or did not run | `psync backup status`; most often disk below 30GB free; `psync backup` to retry |
 | doctor: tailscale node key expires in N days | the node key has an expiry | Tailscale admin console, that machine, disable key expiry (or re-authenticate before the date) |
 | SSH to the VPS prints an approval URL | Tailscale SSH re-checks every 12 hours | open it in a browser, approve |
@@ -39,10 +46,13 @@ in one go. It is removed afterwards.
 
 Sync copies deletions too, so there are two safety nets.
 
-**A file replaced or deleted in the last 30 days.** Syncthing keeps the old copy on the host that
-received the change: `~/projects/.stversions/<same path>~YYYYMMDD-HHMMSS.<ext>`. Look on both hosts
-(`find ~/projects/.stversions -name '*<name>*'`); the host where the delete or edit was made does
-not have it, the other one does. Copy it back out.
+**A file replaced or deleted in the last 30 days (`versions_days`).** Syncthing keeps the last version on
+the host that received the change, in a trashcan: `~/projects/.stversions/<same path>`. One copy per file:
+a second replacement overwrites it. Look on both hosts (`find ~/projects/.stversions -name '*<name>*'`);
+the host where the delete or edit was made does not have it, the other one does. Copy it back out.
+Entries from before 2026-10-20 (staggered versioning) carry a `~YYYYMMDD-HHMMSS` suffix and age out on
+their own. Folders added with `psync folder add` keep theirs outside the folder, in
+`~/.local/state/psync/versions/<folder>/<same path>`.
 
 **Anything older, or a whole folder.** restic snapshots on the VPS (daily 04:30 BRT; 7 daily,
 4 weekly, 6 monthly):
@@ -65,27 +75,100 @@ it the snapshots cannot be opened, and there is no recovery: start a new reposit
 1. Normal way in: `ssh jo@<vps tailscale address>` (Tailscale SSH, approval every 12h).
 2. If Tailscale is down on the VPS for 5 minutes, `psync-ssh-guard` reopens public `tcp/22`
    (`journalctl -t psync-ssh-guard`). `jo` has no `authorized_keys` there, so go in as `ubuntu`
-   (key in `/home/ubuntu/.ssh/authorized_keys`, never delete it) and `sudo -iu jo`. Fix Tailscale
-   (`sudo tailscale up`), and the guard closes the port again within a minute.
-3. The guard logic is covered by `tests/run.sh` with a fake `tailscale` and a fake firewall. It has
-   not been exercised in a real Tailscale outage, and getting in through the OCI console
-   (`ubuntu` has no password) is unproven.
+   (key in `/home/ubuntu/.ssh/authorized_keys`, never delete it) and `sudo -iu jo`:
+   `ssh -i ~/.ssh/vps-oracle ubuntu@<public address from the OCI console>`. That key has a
+   passphrase, so load it first with `ssh-add ~/.ssh/vps-oracle` in a real terminal; without it the
+   emergency door is shut. Bring Tailscale back (`sudo systemctl start tailscaled`, or
+   `sudo tailscale up` if it asks to log in) and the guard closes the port again within a minute.
+3. Exercised for real on 2026-10-20: `systemctl stop tailscaled` on the VPS, the port opened 7 min
+   after the drop, the `ubuntu` login worked with the host key pinned, and after
+   `systemctl start tailscaled` the guard closed the port within 10s and Tailscale SSH worked again
+   without a new approval (the OCI Security List lets tcp/22 through). `tests/run.sh` also covers the
+   guard logic with a fake `tailscale` and firewall. Still unproven: getting in through the OCI
+   console (`ubuntu` has no password).
+
+## Adding or replacing a host
+
+The mesh is symmetric: every host is a full peer holding a complete copy, so any one of them can be
+lost or swapped and the others carry on. `bash psync/tests/mesh.sh` proves it with real Syncthing in
+four sandboxes: pairing through one host, files crossing it, a direct link surviving that host going
+down, a replacement receiving everything from the survivors, and removal. Every host needs the same
+user name and home path (worktree `gitdir:` links and Claude Code's per-path session folders depend on
+it).
+
+1. **Prepare the host** (Debian, Ubuntu or Arch, as the sync user). Copy the `psync` package over (any
+   directory, as long as it is still called `psync`) and run `bash <where>/psync/install.sh` (`--plan`
+   first if you want to see it; `--with-backup` adds restic). It installs Syncthing 2 (the Debian/Ubuntu
+   archives still carry 1.x, so it adds the official `stable-v2` apt repository), `jq`, `curl`, `stow`,
+   `git`, links the package and enables linger. Tested for real on a clean Ubuntu with
+   `bash psync/tests/install-docker.sh`.
+   Say where this host keeps the folder and which ignore rules it gets, before `setup` (see
+   "Settings of this host"): `psync init --folder-path ~/code --ignore-profile generic`. A host laid out
+   like the PC and the VPS needs none of this.
+2. **Join through one host that is already in:** on the new host,
+   `psync setup --peer-id <its ID> --peer-name <name> --peer-address tcp://<its address>:22000 --listen tcp://127.0.0.1:22000`
+   (it prints the new host's own ID; use `--listen tcp://:22000` on a host the others should dial).
+3. **Accept it there:** on the host you joined through, `psync add-host --id <new ID> --name <new name>`.
+   Peers are introducers by default (they are all yours), so the other hosts learn the new one and share
+   the folder with it by themselves. Syncthing then rescans the folder, which takes minutes on a large one.
+4. **Hosts that should still sync when the introducer is off** need each other's address, because
+   Syncthing does not pass addresses along and psync switches discovery off:
+   `psync add-host --id <ID> --name <name> --address tcp://<address>:22000` on both. `psync hosts` shows
+   which are reached "through" another host and which directly.
+5. **Check:** `psync hosts` (everyone connected, 100%), then `psync doctor --roundtrip` on each host.
+6. **Replacing a host:** do 1 to 5 for the new one first and wait until `psync hosts` shows it at 100%.
+   Then `psync remove-host <old name> --yes` on the hosts that knew it; hosts that took the removed host
+   as their introducer drop it on their own. The files on the removed host stay there.
+
+Backups are per host: give every host that should keep its own history `psync backup setup` (and save
+each password separately). Two independent repositories do not depend on each other. They cover
+`~/projects` only, not the folders added below.
+
+## Syncing more folders
+
+`psync setup` creates the base folder, `projects`. Anything else is a folder of its own, added on
+every host that should have it:
+
+```bash
+psync folders                       # what this host syncs, its state, how many hosts share it
+psync folder add --preset claude    # Claude Code sessions and memory: $CLAUDE_CONFIG_DIR or ~/.claude, then projects/
+psync folder add --preset codex     # Codex sessions: $CODEX_HOME or ~/.codex, then sessions/
+psync folder add notes ~/notes      # any other directory: ID, then an absolute path
+psync folder remove claude          # stop syncing it on this host (the files stay)
+```
+
+- **Opt-in on each host.** A folder syncs between the hosts that have added it. `folder add` shares
+  it with every host this one knows, and `add-host` shares every folder with a new host, so the order
+  in which the hosts add it does not matter. A host that has not added it yet only holds an offer.
+- **Only the session directories**, never the config directory around them, so `.credentials.json`,
+  `auth.json` and the app databases cannot travel. If `CLAUDE_CONFIG_DIR` or `CODEX_HOME` already lives
+  inside a synced folder (it does for the PC and VPS: they sit inside `~/projects`), the preset says so
+  and refuses: those sessions already sync with `projects`.
+- **Same absolute path on every host**, as for `projects`: Claude Code names a session folder after the
+  working directory. Folders cannot nest, so psync refuses a path inside another folder or containing one.
+- **Old versions** go to a trashcan outside the folder (see "Recovering data"), not to a `.stversions`
+  inside it: a harness finds and resumes sessions by scanning its directory, and a transcript that grows
+  all day would be archived over and over.
+- **Transcripts hold whatever was typed or printed in the chat**, `.env` contents and tokens included.
+  They go to every host that adds the folder: only hosts you own.
+- Checked with real Syncthing by `tests/mesh.sh`. Not yet tried end to end with `claude --resume` and
+  `codex resume` on a host that is not the PC or the VPS: do that after the first sync of a new setup.
 
 ## Rebuild the VPS from nothing
 
 The PC still has every file, so only the restic history (which lives only on the VPS) is lost.
 
 1. New Ubuntu instance. Create user `jo` (same name and home path as the PC: worktree `gitdir:`
-   links and Claude Code's per-path session folders depend on `/home/jo`) and run
-   `sudo loginctl enable-linger jo`.
-2. Install: `syncthing` (from the Syncthing apt repo), `restic`, `jq`, `stow`, `git`, `curl`, `zsh`,
-   `tmux`, `neovim`, `nodejs`, `npm`, `iptables-persistent`, `gh`, and `tailscale`. Join the tailnet
-   with SSH enabled, approve the node, **disable key expiry** for it.
+   links and Claude Code's per-path session folders depend on `/home/jo`).
+2. Copy the `psync` package over and run `install.sh --with-backup` as `jo` (see "Adding or replacing a
+   host", step 1): it installs Syncthing 2, `restic`, `jq`, `stow`, `git`, `curl`, links the package and
+   enables linger. Then install by hand what it does not handle: `zsh`, `tmux`, `neovim`, `nodejs`,
+   `npm`, `iptables-persistent`, `gh` and `tailscale`. Join the tailnet with SSH enabled, approve the
+   node, **disable key expiry** for it.
 3. Install Claude Code and Codex for `jo`, then log in to Claude, Codex and `gh` **on the VPS**.
    Credentials are never copied between hosts.
-4. Pair it as in the README ("Pairing a new host"): copy the `psync` package over, `stow --no-folding`,
-   `psync setup` on the VPS and on the PC. Then wait: the first sync moves everything (about 500k
-   files, 18GB) and takes hours. `psync status` until in sync.
+4. Pair it as in "Adding or replacing a host" (steps 2 and 3). Then wait: the first sync moves
+   everything (about 500k files, 18GB) and takes hours. `psync status` until in sync.
 5. `bash ~/projects/dotfiles/psync/vps/install.sh user`, then `sudo bash .../vps/install.sh root`
    (the public-SSH guard; do it from a Tailscale session, not from the public address).
 6. `psync backup setup`, and save the new password.
@@ -102,7 +185,11 @@ receive everything; check `psync status` and the VPS's `git status` before trust
 
 ## Changing things
 
-- **The ignore file** (`psync/.config/psync/stignore`) is synced, so one edit applies on both hosts.
+- **The ignore rules** come in two parts. The generic ones (dependencies and caches, git lock files, SQLite
+  companions) are the profile `psync/.config/psync/profiles/generic`; the PC's and the VPS's own layout
+  (Claude and Codex state under `agents/<key>/`, fixtures, runtime databases) is `psync/.config/psync/stignore`,
+  which `#include`s the profile. Both are inside `~/projects`, so they are synced and one edit applies on
+  both hosts. A host without that layout sets `ignore_profile=generic` instead (see "Settings of this host").
   Rule: whatever git *tracks* must sync, or it shows as deleted on the other host; carve tracked
   files out with a `!` exception placed before the pattern that hides them. Afterwards check
   `git status` for unexpected deletions on the other host. If an edit seems not to apply,
@@ -112,7 +199,48 @@ receive everything; check `psync status` and the VPS's `git status` before trust
   over the real one.
 - **Upgrading Syncthing** (pacman on the PC, apt on the VPS; its auto-upgrade is off): keep both
   on the same major version, then run the tests and `psync doctor --roundtrip`.
-- **Backup policy and thresholds** are the constants at the top of the script.
+- **Running `psync setup` again** is safe: it refreshes the folder's configuration (this is how a change
+  such as the versioning kind reaches a host that is already set up), and keeps the peers and the listen
+  address (`--listen` changes the latter). Syncthing restarts the folder when its configuration changed,
+  and rescans it: about 6 min on 500k files.
+- **Settings of this host** live in `~/.config/psync/config` (see the next section). The backup
+  retention (`BACKUP_KEEP`) and the Tailscale key thresholds are still constants at the top of the script.
+
+## Settings of this host
+
+Optional. Without a file the defaults apply, and they are the layout of the PC and the VPS, so those
+two need no file. Nothing in it has to match the other hosts.
+
+```bash
+psync config                                          # what is in effect, and where each value comes from
+psync init                                            # write the file with every default commented out
+psync init --folder-path ~/code --ignore-profile generic  # what a host that is not laid out like the PC wants
+psync init --folder-path ~/code --ignore-include none     # or write .stignore yourself (--force replaces an existing file)
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `folder_path` | `~/projects` | the base folder (id `projects`, the same on every host). The path may differ per host |
+| `ignore_include` | `dotfiles/psync/.config/psync/stignore` | the ignore rules for it: a file inside the folder, relative, that syncs along. `none` leaves `.stignore` alone (you write your own) |
+| `ignore_profile` | none | instead of the include: a named rule set from `~/.config/psync/profiles/` (`generic`) that `psync setup` writes into `<folder>/.stignore`. Setting it turns the include off; setting both is an error. `psync doctor` fails if `.stignore` stops matching the profile (`psync setup` rewrites it; an `.stignore` someone else wrote is kept as `.stignore.bak`) |
+| `versions_days` | 30 | days a replaced or deleted file stays recoverable |
+| `disk_warn_gb` | 20 | `psync doctor` warns below this much free space. `PSYNC_DISK_WARN_GB` overrides it |
+| `disconnect_warn_hours` | 1 | `psync check` warns when a host has been unreachable this long |
+| `backup_min_free_gb` | 30 | `psync backup` takes no snapshot below this |
+| `backup_stale_hours` | 36 | `psync ready` and `doctor` warn when the last backup is older |
+
+The file is `KEY=VALUE` per line, no quotes, `#` for comment lines. It is read as data, never executed,
+and a typo (unknown setting, a word where a number goes, a relative path) stops every command with the
+line number. `psync help` and `psync init` still work then.
+
+**Changing `folder_path` on a host that already syncs is a move, not a setting.** Pointing a Syncthing
+folder at another directory makes it read that directory as the folder's content; if it is empty,
+everything looks deleted, and the deletions travel to every host. So `psync setup` refuses to repoint
+a folder to a directory that is not a Syncthing folder yet (it has no `.stfolder` marker, which a `mv`
+carries along and a new empty directory lacks), and `psync doctor` fails while the setting and Syncthing
+disagree. To move it: `psync pause`, `mv` the directory, set `folder_path`, `psync setup` (without peer
+options it only repoints the folder), `psync resume`, then `psync status` and
+`psync doctor --roundtrip` before trusting it.
 
 ## Where things live
 
@@ -122,9 +250,12 @@ receive everything; check `psync status` and the VPS's `git status` before trust
 | shell hook | PC: `ai` function in the live `~/.zshrc` (not a stow link). VPS: login hook in `~/.zshrc` and the `ai` wrapper | PC: `zsh/.zshrc`. VPS: `psync/vps/` |
 | public-SSH guard (root) | VPS: `/usr/local/sbin/psync-ssh-guard`, `/etc/systemd/system/psync-ssh-guard.*`, firewall backup in `/root/psync-fw-backup` | `psync/vps/` |
 | Syncthing identity and config | `~/.local/state/syncthing` on each host | no, per host |
+| settings of the host | `~/.config/psync/config` (optional; the stowed files next to it are links, this one is a plain file) | no, per host |
 | logins (Claude, Codex, `gh`) | per host | never |
 | restic repository and password | VPS only, outside `~/projects` | no |
-| tests | `psync/tests/run.sh` (about 45 checks, 30-60s, no side effects) | `psync/tests/` |
+| old versions of folders added with `folder add` | `~/.local/state/psync/versions/<folder>/` on each host | no, per host |
+| tests | `run.sh` (about 160 checks against a fake Syncthing, about 3 minutes), `mesh.sh` (real Syncthing, 4 sandboxes, about 5 minutes), `install-docker.sh` (clean Ubuntu in docker, needs network). None touch your own hosts | `psync/tests/` |
+| host installer | `psync/install.sh` (packages, link, linger; `--plan` changes nothing) | `psync/` |
 
 ## Limits worth remembering
 
@@ -132,5 +263,14 @@ receive everything; check `psync status` and the VPS's `git status` before trust
   off or asleep. `psync wait` before leaving stays manual.
 - Two hosts writing the same repo at the same moment is the one thing to avoid; a separate worktree per
   host is fine.
+- A live agent session keeps `psync wait` from reaching "in sync": a Codex or Claude session that is
+  still appending to its transcript (these can be hundreds of MB) leaves the other host a few KB
+  behind at every moment. Seen on 2026-10-20 with a 197MB Codex rollout; `psync hosts` showed the peer
+  at 98% while the folder itself was idle. Close or pause the session, then wait.
+- Old versions are a trashcan (one copy per file), not staggered, on purpose: staggered keeps a copy
+  about every 30s for the first hour, so a transcript that grows all day left 17 copies of one 197MB
+  rollout (3.3GB) in the PC's `.stversions` within an hour on 2026-10-20. The price: no history of
+  several versions of a file. git has the code's, and the restic snapshots (VPS) have the rest.
+  `psync doctor` warns on a host whose `projects` still uses another kind.
 - Dependencies (`node_modules`, `.venv`, `target`) are rebuilt per host: the VPS is ARM.
 - The backups sit on the same disk as the VPS copy of the data. The PC is the other full copy.

@@ -1,43 +1,127 @@
 #!/usr/bin/env bash
-# psync — keep ~/projects identical on every host with Syncthing.
+# psync — keep your folders identical on every host with Syncthing.
 #
-#   psync status        peers, pending changes and conflicts (exit 1 if not in sync)
+#   psync status        folders, peers, pending changes and conflicts (exit 1 if not in sync)
 #   psync wait [SECS]   block until every peer has everything (default timeout 600s)
 #   psync ready [SECS]  for launchers and logins: wait briefly until this host caught up, never fails
 #   psync backup [run|status|setup|restic ARGS...]   restic snapshots of ~/projects (opt-in per host)
 #   psync conflicts     list *.sync-conflict-* files
-#   psync pause         stop syncing on this host (survives reboots)
+#   psync pause         stop syncing every folder on this host (survives reboots)
 #   psync resume        continue where it stopped
 #   psync tidy          park git-index conflict copies outside the synced tree
 #   psync check         tidy, then notify about conflicts, errors or a long disconnection (timer)
 #   psync doctor [--roundtrip]   health check of this host, for after any change; --roundtrip also sends a canary file through
-#   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR]
+#   psync hosts         every host in the mesh: state, how much it has, how this host reaches it
+#   psync add-host --id ID --name NAME [--address ADDR] [--no-introducer]   pair another host (on any host already in)
+#   psync remove-host NAME|ID [--yes]   stop syncing with a host (its files stay where they are)
+#   psync folders       every synced folder: state, how many hosts share it, where it lives
+#   psync folder add ID PATH | add --preset claude|codex   sync one more folder (opt-in: run it on every host that wants it)
+#   psync folder remove ID [--yes]   stop syncing a folder on this host (its files stay where they are)
+#   psync init [--folder-path PATH] [--ignore-profile NAME | --ignore-include FILE|none] [--force]   write this host's settings file
+#   psync config        the settings in effect on this host and where each comes from
+#   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR] [--no-introducer]
 #
-# Thin wrapper over the local Syncthing REST API. Every host runs the same setup;
-# ignore patterns live in dotfiles/psync/.config/psync/stignore, which syncs too.
+# Thin wrapper over the local Syncthing REST API. Every host runs the same setup. The base folder
+# (projects) takes its ignore patterns from an include file that syncs too (setting ignore_include).
+# psync owns its Syncthing instance, so every folder in it is a psync folder and each command
+# acts on all of them. Settings that differ per host live in ~/.config/psync/config.
 
 set -euo pipefail
 
+# The base folder, created by `psync setup`. More folders come from `psync folder add`. Its id is
+# the same on every host (hosts only sync a folder whose id matches), so it is not a setting.
 FOLDER_ID=projects
-FOLDER_PATH="$HOME/projects"
-IGNORE_INCLUDE="dotfiles/psync/.config/psync/stignore"
+FOLDER_ID_RE='^[a-z0-9][a-z0-9._-]*$'
 ST_HOME="${STHOMEDIR:-$HOME/.local/state/syncthing}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/psync"
-VERSIONS_MAX_AGE=$((30 * 86400))
-DISCONNECT_WARN_AFTER=3600
-# Backups live outside ~/projects (or they would be synced back), password included.
+
+# Settings, overridden by ~/.config/psync/config (load_config). The variable of a setting is its
+# name in capitals; what is derived from them is computed once the file is read.
+CONFIG_FILE="$HOME/.config/psync/config"
+CONFIG_KEYS=(folder_path ignore_include ignore_profile versions_days disk_warn_gb disconnect_warn_hours backup_min_free_gb backup_stale_hours)
+FOLDER_PATH="$HOME/projects"                              # the base folder (the same path on every host if you can)
+IGNORE_INCLUDE="dotfiles/psync/.config/psync/stignore"    # relative to it; none = psync leaves .stignore alone
+IGNORE_PROFILE=""                                         # a named rule set psync writes into .stignore (instead of the include)
+PROFILES_DIR="$HOME/.config/psync/profiles"
+VERSIONS_DAYS=30                                          # how long replaced or deleted files stay recoverable
+DISK_WARN_GB=20                                           # doctor warns below this much free space
+DISCONNECT_WARN_HOURS=1                                   # check warns when a host has been gone this long
+BACKUP_MIN_FREE_GB=30                                     # no restic snapshot below this much free space
+BACKUP_STALE_HOURS=36                                     # ready and doctor warn when the last backup is older
+declare -A CONFIG_SRC=()
+
+# Folders added with `folder add` keep their old versions here, not inside the folder: a chat
+# harness lists and resumes sessions by scanning its folder, and must not meet archived copies.
+VERSIONS_DIR="$STATE_DIR/versions"
+# Backups live outside the synced folders (or they would be synced back), password included.
 BACKUP_REPO="${XDG_DATA_HOME:-$HOME/.local/share}/psync-backup/repo"
 BACKUP_PASSWORD="$STATE_DIR/backup-password"
 BACKUP_EXCLUDES="$HOME/.config/psync/backup-excludes"
-BACKUP_MIN_FREE_GB=30
 BACKUP_KEEP=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
-BACKUP_STALE_AFTER=$((36 * 3600))
-DISK_WARN_GB=${PSYNC_DISK_WARN_GB:-20}
 ROUNDTRIP_TIMEOUT=${PSYNC_ROUNDTRIP_TIMEOUT:-90}
 KEY_WARN_DAYS=120
 KEY_FAIL_DAYS=30
+DEVICE_ID_RE='^([A-Z0-9]{7}-){7}[A-Z0-9]{7}$'
 
 die() { echo "psync: $*" >&2; exit 1; }
+
+# set_setting KEY VALUE WHERE: check one setting and store it. WHERE names its origin in errors.
+set_setting() {
+  local key=$1 val=$2 where=$3
+  [[ " ${CONFIG_KEYS[*]} " == *" $key "* ]] || die "$where: unknown setting '$key' (known: ${CONFIG_KEYS[*]})"
+  val=${val/#\~/$HOME}
+  case $key in
+    folder_path)
+      val=${val%/}
+      [[ $val == /* ]] || die "$where: folder_path must be an absolute path (or start with ~/), got '$val'"
+      ;;
+    ignore_include)
+      [[ $val != none ]] || val=""
+      [[ $val != /* && $val != *..* ]] || die "$where: ignore_include is a path inside the folder, without .. (or none), got '$val'"
+      ;;
+    ignore_profile)
+      [[ $val != none ]] || val=""
+      [[ -z $val || $val =~ ^[a-z0-9][a-z0-9._-]*$ ]] || die "$where: ignore_profile is a profile name such as generic, or none, got '$val'"
+      ;;
+    versions_days)
+      [[ $val =~ ^[0-9]+$ && $val -ge 1 ]] || die "$where: versions_days must be a whole number of days, 1 or more, got '$val'"
+      ;;
+    *) [[ $val =~ ^[0-9]+$ ]] || die "$where: $key must be a whole number, got '$val'" ;;
+  esac
+  printf -v "${key^^}" '%s' "$val"
+}
+
+# load_config: read CONFIG_FILE (KEY=VALUE per line, # starts a comment line; read as data, never
+# executed), then let PSYNC_DISK_WARN_GB win, then compute what depends on the settings.
+load_config() {
+  local key val line n=0
+  for key in "${CONFIG_KEYS[@]}"; do CONFIG_SRC[$key]=default; done
+  if [[ -r $CONFIG_FILE ]]; then
+    while IFS= read -r line || [[ -n $line ]]; do
+      n=$((n + 1))
+      line=${line#"${line%%[![:space:]]*}"}
+      [[ -n $line && $line != \#* ]] || continue
+      [[ $line == *=* ]] || die "$CONFIG_FILE line $n: expected KEY=VALUE, got '$line'"
+      key=${line%%=*}
+      key=${key//[[:space:]]/}
+      val=${line#*=}
+      val=${val#"${val%%[![:space:]]*}"}
+      val=${val%"${val##*[![:space:]]}"}
+      set_setting "$key" "$val" "$CONFIG_FILE line $n"
+      CONFIG_SRC[$key]=file
+    done <"$CONFIG_FILE"
+  fi
+  if [[ -n ${PSYNC_DISK_WARN_GB-} ]]; then
+    set_setting disk_warn_gb "$PSYNC_DISK_WARN_GB" "PSYNC_DISK_WARN_GB"
+    CONFIG_SRC[disk_warn_gb]=env
+  fi
+  # A profile replaces the include: choosing one needs no ignore_include=none next to it.
+  if [[ -n $IGNORE_PROFILE && ${CONFIG_SRC[ignore_include]} == default ]]; then IGNORE_INCLUDE=""; fi
+  [[ -z $IGNORE_PROFILE || -z $IGNORE_INCLUDE ]] ||
+    die "$CONFIG_FILE: ignore_profile and ignore_include are alternatives, set only one of them"
+  DISCONNECT_WARN_AFTER=$((DISCONNECT_WARN_HOURS * 3600))
+  BACKUP_STALE_AFTER=$((BACKUP_STALE_HOURS * 3600))
+}
 
 config_value() {
   local cfg="$ST_HOME/config.xml"
@@ -58,8 +142,57 @@ api() {
 
 my_id() { api GET system/status | jq -r .myID; }
 
+# --- Folders. Every command acts on all of them; the order is the one Syncthing lists them in.
+
+folder_ids() { api GET config/folders | jq -r '.[].id'; }
+
+# folder_path ID → absolute path
+folder_path() {
+  local p
+  p=$(api GET "config/folders/$1" | jq -r .path)
+  echo "${p/#\~/$HOME}"
+}
+
+folder_paths() {
+  local id
+  for id in $(folder_ids); do folder_path "$id"; done
+}
+
+# active_folders: the folders that are not paused on this host
+active_folders() {
+  local id
+  for id in $(folder_ids); do
+    [[ $(api GET "config/folders/$id" | jq -r .paused) == false ]] && echo "$id"
+  done
+  return 0
+}
+
+# all_idle ID...: succeeds when none of these folders has anything to pull
+all_idle() {
+  local id
+  for id in "$@"; do
+    [[ $(api GET "db/status?folder=$id" | jq -r '.state + (.needTotalItems | tostring)') == idle0 ]] || return 1
+  done
+}
+
+# folder_peers ID: the other hosts this folder is shared with
+folder_peers() {
+  api GET "config/folders/$1" | jq -r --arg me "$(my_id)" '.devices[].deviceID | select(. != $me)'
+}
+
+# peers: every other host that shares at least one folder with this one
 peers() {
-  api GET "config/folders/$FOLDER_ID" | jq -r --arg me "$(my_id)" '.devices[].deviceID | select(. != $me)'
+  api GET config/folders | jq -r --arg me "$(my_id)" '[.[].devices[].deviceID | select(. != $me)] | unique[]'
+}
+
+# not_sharing COMPLETION_JSON: a connected host that has not added the folder yet. Sharing is opt-in
+# on each host, so this is nothing to wait for (and not an error), only worth mentioning. Syncthing
+# 2.1 reports such a host as "unknown" (it only has an offer for the folder), never "notSharing".
+not_sharing() {
+  case $(jq -r '.remoteState // "valid"' <<<"$1") in
+    unknown | notSharing) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # last_seen DEVICE_ID [STATS_JSON]   (stats/device is fetched when not given)
@@ -70,8 +203,11 @@ last_seen() {
 }
 
 conflict_files() {
-  find "$FOLDER_PATH" \( -name node_modules -o -name .venv -o -name .stversions \) -prune \
-    -o -name '*.sync-conflict-*' -print 2>/dev/null
+  local p
+  while IFS= read -r p; do
+    find "$p" \( -name node_modules -o -name .venv -o -name .stversions \) -prune \
+      -o -name '*.sync-conflict-*' -print 2>/dev/null || true
+  done < <(folder_paths)
 }
 
 # `git status` rewrites .git/index, so two hosts touching the same repo at the same
@@ -79,12 +215,14 @@ conflict_files() {
 # survives as objects), so park those copies outside the synced tree for a week
 # instead of raising an alarm.
 park_index_conflicts() {
-  local f dest="$STATE_DIR/index-conflicts"
+  local f p dest="$STATE_DIR/index-conflicts"
   mkdir -p "$dest"
-  while IFS= read -r -d '' f; do
-    mv -- "$f" "$dest/$(date +%s)-${f//\//_}" && echo "parked git index conflict: ${f#"$FOLDER_PATH"/}"
-  done < <(find "$FOLDER_PATH" \( -name node_modules -o -name .venv -o -name .stversions \) -prune \
-    -o -path '*/.git/*' -name 'index.sync-conflict-*' -mmin +2 -print0 2>/dev/null)
+  while IFS= read -r p; do
+    while IFS= read -r -d '' f; do
+      mv -- "$f" "$dest/$(date +%s)-${f//\//_}" && echo "parked git index conflict: ${f/#"$HOME"/\~}"
+    done < <(find "$p" \( -name node_modules -o -name .venv -o -name .stversions \) -prune \
+      -o -path '*/.git/*' -name 'index.sync-conflict-*' -mmin +2 -print0 2>/dev/null)
+  done < <(folder_paths)
   find "$dest" -type f -mtime +7 -delete 2>/dev/null || true
 }
 
@@ -92,47 +230,68 @@ park_index_conflicts() {
 # watcher and would wait for the next scheduled full rescan (a day). So once per
 # Syncthing start, as soon as the startup scan is over, request one more full scan.
 settle_scan() {
-  local started
+  local started id
   started=$(api GET system/status | jq -r .startTime)
-  [[ $(cat "$STATE_DIR/settled-start" 2>/dev/null) != "$started" ]] || return 0
-  [[ $(api GET "db/status?folder=$FOLDER_ID" | jq -r .state) == idle ]] || return 0
-  echo "$started" >"$STATE_DIR/settled-start"
-  # The call returns only when the scan ends; the request itself is queued at once.
-  api POST "db/scan?folder=$FOLDER_ID" >/dev/null 2>&1 &
+  for id in $(folder_ids); do
+    [[ $(cat "$STATE_DIR/settled-$id" 2>/dev/null) != "$started" ]] || continue
+    [[ $(api GET "db/status?folder=$id" | jq -r .state) == idle ]] || continue
+    echo "$started" >"$STATE_DIR/settled-$id"
+    # The call returns only when the scan ends; the request itself is queued at once.
+    api POST "db/scan?folder=$id" >/dev/null 2>&1 &
+  done
   sleep 1
+}
+
+# report_folder ID CONNS LABEL: the lines for one folder (LABEL tells them apart when there are
+# several); returns 0 only when nothing is pending. Disconnected hosts are left to `report`.
+report_folder() {
+  local fid=$1 conns=$2 lab=$3 db comp errors rc=0 id name completion
+  if [[ $(api GET "config/folders/$fid" | jq -r .paused) == true ]]; then
+    echo "folder:    ${lab}PAUSED on this host (psync resume)"
+    return 1
+  fi
+  db=$(api GET "db/status?folder=$fid")
+  jq -r --arg lab "$lab" '"folder:    \($lab)\(.state), \(.needTotalItems) item(s) / \(.needBytes) bytes to pull"' <<<"$db"
+  [[ $(jq -r '.state + (.needTotalItems | tostring)' <<<"$db") == idle0 ]] || rc=1
+
+  for id in $(folder_peers "$fid"); do
+    [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] || continue
+    name=$(api GET "config/devices/$id" | jq -r .name)
+    comp=$(api GET "db/completion?folder=$fid&device=$id")
+    if not_sharing "$comp"; then
+      echo "peer:      ${lab}$name connected, but has not added this folder (there: psync folder add)"
+      continue
+    fi
+    completion=$(jq -r '.completion | floor' <<<"$comp")
+    echo "peer:      ${lab}$name connected, has ${completion}% of this host's data"
+    [[ $completion == 100 ]] || rc=1
+  done
+
+  errors=$(api GET "folder/errors?folder=$fid" | jq '.errors // [] | length')
+  if ((errors > 0)); then
+    echo "errors:    ${lab}$errors (details: journalctl --user -u syncthing, or the GUI at $(config_value address))"
+    rc=1
+  fi
+  return $rc
 }
 
 # Prints folder, peer and error lines; returns 0 only when nothing is pending anywhere.
 report() {
-  local db conns stats errors rc=0
-  if [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == true ]]; then
-    echo "folder:    PAUSED on this host (psync resume)"
-    return 1
-  fi
-  db=$(api GET "db/status?folder=$FOLDER_ID")
-  jq -r '"folder:    \(.state), \(.needTotalItems) item(s) / \(.needBytes) bytes to pull"' <<<"$db"
-  [[ $(jq -r '.state + (.needTotalItems | tostring)' <<<"$db") == idle0 ]] || rc=1
-
+  local ids=() id conns stats lab rc=0
+  mapfile -t ids < <(folder_ids)
+  ((${#ids[@]} > 0)) || { echo "folder:    none set up (psync setup)"; return 1; }
   conns=$(api GET system/connections)
   stats=$(api GET stats/device)
-  for id in $(peers); do
-    local name completion
-    name=$(api GET "config/devices/$id" | jq -r .name)
-    if [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]]; then
-      completion=$(api GET "db/completion?folder=$FOLDER_ID&device=$id" | jq -r '.completion | floor')
-      echo "peer:      $name connected, has ${completion}% of this host's data"
-      [[ $completion == 100 ]] || rc=1
-    else
-      echo "peer:      $name DISCONNECTED (last seen $(last_seen "$id" "$stats"))"
-      rc=1
-    fi
+  for id in "${ids[@]}"; do
+    lab=""
+    if ((${#ids[@]} > 1)); then lab="[$id] "; fi
+    report_folder "$id" "$conns" "$lab" || rc=1
   done
-
-  errors=$(api GET "folder/errors?folder=$FOLDER_ID" | jq '.errors // [] | length')
-  if ((errors > 0)); then
-    echo "errors:    $errors (details: journalctl --user -u syncthing, or the GUI at $(config_value address))"
+  for id in $(peers); do
+    [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] && continue
+    echo "peer:      $(api GET "config/devices/$id" | jq -r .name) DISCONNECTED (last seen $(last_seen "$id" "$stats"))"
     rc=1
-  fi
+  done
   return $rc
 }
 
@@ -169,15 +328,15 @@ cmd_wait() {
 # longer than SECS: Ctrl-C skips the wait. Edits made on the other host in the last ~10s
 # are not announced yet; that side's `psync wait` covers them.
 cmd_ready() {
-  local timeout=${1:-60} start=$SECONDS waited=0 settled=0 caught_up=0 db conns id
+  local timeout=${1:-60} start=$SECONDS waited=0 settled=0 caught_up=0 conns id active=()
   trap 'echo "psync: wait skipped" >&2; exit 0' INT
   api GET system/ping >/dev/null 2>&1 || { echo "psync: Syncthing is not running here (psync resume)" >&2; return 0; }
-  [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == false ]] \
-    || { echo "psync: sync is paused on this host (psync resume)" >&2; return 0; }
+  mapfile -t active < <(active_folders)
+  ((${#active[@]} > 0)) \
+    || { echo "psync: sync is paused on this host (psync resume), or no folder is set up (psync setup)" >&2; return 0; }
 
   while true; do
-    db=$(api GET "db/status?folder=$FOLDER_ID")
-    if [[ $(jq -r '.state + (.needTotalItems | tostring)' <<<"$db") == idle0 ]]; then
+    if all_idle "${active[@]}"; then
       # After a wait, look once more: the next batch may be announced only now.
       if ((waited == 0 || settled++ > 0)); then
         caught_up=1
@@ -279,10 +438,11 @@ cmd_backup() {
 }
 
 cmd_check() {
-  local conflicts errors conns now msgs=()
+  local conflicts errors conns now id msgs=() active=()
   # Stopped or paused on purpose (psync pause): nothing to warn about.
   api GET system/ping >/dev/null 2>&1 || return 0
-  [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == false ]] || return 0
+  mapfile -t active < <(active_folders)
+  ((${#active[@]} > 0)) || return 0
   mkdir -p "$STATE_DIR"
   now=$(date +%s)
 
@@ -290,12 +450,14 @@ cmd_check() {
   park_index_conflicts
   conflicts=$(conflict_files | wc -l)
   if ((conflicts > 0)) && [[ $conflicts != "$(cat "$STATE_DIR/conflicts" 2>/dev/null)" ]]; then
-    msgs+=("$conflicts sync conflict(s) in ~/projects — run: psync conflicts")
+    msgs+=("$conflicts sync conflict(s) — run: psync conflicts")
   fi
   echo "$conflicts" >"$STATE_DIR/conflicts"
 
-  errors=$(api GET "folder/errors?folder=$FOLDER_ID" | jq '.errors // [] | length')
-  ((errors == 0)) || msgs+=("$errors folder error(s) in ~/projects — run: psync status")
+  for id in "${active[@]}"; do
+    errors=$(api GET "folder/errors?folder=$id" | jq '.errors // [] | length')
+    ((errors == 0)) || msgs+=("$errors error(s) in folder $id — run: psync status")
+  done
 
   conns=$(api GET system/connections)
   for id in $(peers); do
@@ -327,38 +489,44 @@ d_ok() { printf '  ok    %s\n' "$*"; }
 d_warn() { printf '  warn  %s\n' "$*"; doctor_warns=$((doctor_warns + 1)); }
 d_fail() { printf '  FAIL  %s\n' "$*"; doctor_fails=$((doctor_fails + 1)); }
 
-# Writes a canary under ~/projects and waits until every peer reports having it: the one check
-# that covers scan, announce, transfer and the ignore rules together.
+# doctor_roundtrip ID PATH LABEL: writes a canary in the folder and waits until every connected peer
+# reports having it: the one check that covers scan, announce, transfer and the ignore rules together.
+# A peer that has not added the folder cannot get it and is skipped.
 doctor_roundtrip() {
-  local canary=$FOLDER_PATH/.psync-canary-$(uname -n)-$$ start=$SECONDS id pending=() connected=0 conns
+  local fid=$1 fpath=$2 lab=$3
+  local canary=$fpath/.psync-canary-$(uname -n)-$$ start=$SECONDS id pending=() connected=0 conns comp
   conns=$(api GET system/connections)
-  for id in $(peers); do
+  for id in $(folder_peers "$fid"); do
     [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]] || continue
-    pending+=("$id")
     connected=1
+    comp=$(api GET "db/completion?folder=$fid&device=$id")
+    ! not_sharing "$comp" || continue
+    pending+=("$id")
   done
-  ((connected)) || { d_fail "roundtrip: no peer is connected, nothing to send the canary to"; return; }
+  ((connected)) || { d_fail "roundtrip$lab: no peer is connected, nothing to send the canary to"; return; }
+  ((${#pending[@]} > 0)) || { d_warn "roundtrip$lab: no connected peer has added this folder yet (there: psync folder add)"; return; }
 
   date +%s >"$canary"
   while ((${#pending[@]} > 0 && SECONDS - start < ROUNDTRIP_TIMEOUT)); do
     sleep 2
     local still=()
     for id in "${pending[@]}"; do
-      api GET "db/file?folder=$FOLDER_ID&file=${canary##*/}" 2>/dev/null |
+      api GET "db/file?folder=$fid&file=${canary##*/}" 2>/dev/null |
         jq -e --arg id "$id" '.availability // [] | any(.id == $id)' >/dev/null 2>&1 || still+=("$id")
     done
     pending=("${still[@]}")
   done
   rm -f -- "$canary"
   if ((${#pending[@]} == 0)); then
-    d_ok "roundtrip: a canary file reached every connected peer in $((SECONDS - start))s"
+    d_ok "roundtrip$lab: a canary file reached every connected peer in $((SECONDS - start))s"
   else
-    d_fail "roundtrip: the canary did not reach $(api GET "config/devices/${pending[0]}" | jq -r .name) within ${ROUNDTRIP_TIMEOUT}s"
+    d_fail "roundtrip$lab: the canary did not reach $(api GET "config/devices/${pending[0]}" | jq -r .name) within ${ROUNDTRIP_TIMEOUT}s"
   fi
 }
 
 cmd_doctor() {
-  local roundtrip=false out unit n free_gb ts state expiry days w down=()
+  local roundtrip=false out="" unit n free_gb ts state expiry days w id p v avail mount lab down=() ids=() paused=0
+  local -A seen_mount=()
   [[ ${1-} != --roundtrip ]] || roundtrip=true
   doctor_fails=0 doctor_warns=0
   echo "psync doctor ($(uname -n))"
@@ -370,22 +538,54 @@ cmd_doctor() {
   fi
   d_ok "Syncthing $(api GET system/version | jq -r .version) is running"
 
-  if [[ $(api GET "config/folders/$FOLDER_ID" | jq -r .paused) == true ]]; then
-    d_fail "folder $FOLDER_ID is paused on this host (psync resume)"
-  elif out=$(report); then
-    d_ok "in sync with every peer"
+  mapfile -t ids < <(folder_ids)
+  if ((${#ids[@]} == 0)); then
+    d_fail "no folder is set up (psync setup)"
   else
-    d_warn "not fully in sync (normal right after an edit or while a peer is offline):"
-    sed 's/^/            /' <<<"$out"
+    for id in "${ids[@]}"; do
+      if [[ $(api GET "config/folders/$id" | jq -r .paused) == true ]]; then
+        d_fail "folder $id is paused on this host (psync resume)"
+        paused=1
+      fi
+    done
+    if ((paused == 0)); then
+      if out=$(report); then
+        d_ok "in sync with every peer"
+      else
+        d_warn "not fully in sync (normal right after an edit or while a peer is offline):"
+        sed 's/^/            /' <<<"$out"
+      fi
+    fi
+    if [[ $out == *"has not added this folder"* ]]; then
+      d_warn "a peer has not added a folder this host shares (run psync folder add there):"
+      grep 'has not added this folder' <<<"$out" | sed 's/^/            /'
+    fi
   fi
 
   n=$(conflict_files | wc -l)
   if ((n == 0)); then d_ok "no sync conflicts"; else d_warn "$n sync conflict(s) (psync conflicts)"; fi
 
-  if [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "#include $IGNORE_INCLUDE" && -r $FOLDER_PATH/$IGNORE_INCLUDE ]]; then
-    d_ok "ignore rules: ~/projects/.stignore includes $IGNORE_INCLUDE"
+  local here=${FOLDER_PATH/#"$HOME"/\~}
+  if p=$(folder_path "$FOLDER_ID" 2>/dev/null) && [[ ${p%/} != "$FOLDER_PATH" ]]; then
+    d_fail "folder_path says $here but Syncthing syncs ${p/#"$HOME"/\~} as folder $FOLDER_ID (psync config; psync setup explains how to move it)"
+  fi
+  if v=$(api GET "config/folders/$FOLDER_ID" 2>/dev/null | jq -r '.versioning.type // ""') && [[ -n $v && $v != trashcan ]]; then
+    d_warn "folder $FOLDER_ID keeps old versions with '$v': a transcript that keeps growing is archived again and again and fills the disk (psync setup switches it to trashcan)"
+  fi
+  if [[ -n $IGNORE_PROFILE ]]; then
+    if [[ ! -r $PROFILES_DIR/$IGNORE_PROFILE ]]; then
+      d_fail "ignore rules: no profile '$IGNORE_PROFILE' in ${PROFILES_DIR/#"$HOME"/\~} (have: $(profile_names))"
+    elif [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "$(profile_stignore)" ]]; then
+      d_ok "ignore rules: $here/.stignore holds the '$IGNORE_PROFILE' profile"
+    else
+      d_fail "ignore rules: $here/.stignore is not the '$IGNORE_PROFILE' profile (psync setup rewrites it)"
+    fi
+  elif [[ -z $IGNORE_INCLUDE ]]; then
+    d_ok "ignore rules: $here/.stignore is yours, psync leaves it alone (ignore_include is none)"
+  elif [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "#include $IGNORE_INCLUDE" && -r $FOLDER_PATH/$IGNORE_INCLUDE ]]; then
+    d_ok "ignore rules: $here/.stignore includes $IGNORE_INCLUDE"
   else
-    d_fail "ignore rules: ~/projects/.stignore does not include $IGNORE_INCLUDE (psync setup)"
+    d_fail "ignore rules: $here/.stignore does not include $IGNORE_INCLUDE (psync setup)"
   fi
 
   local units=(syncthing.service psync-check.timer)
@@ -406,8 +606,23 @@ cmd_doctor() {
     fi
   fi
 
-  free_gb=$(($(df --output=avail -k "$FOLDER_PATH" | tail -1) / 1048576))
-  if ((free_gb < DISK_WARN_GB)); then d_warn "disk: only ${free_gb}GB free where ~/projects lives"; else d_ok "disk: ${free_gb}GB free where ~/projects lives"; fi
+  # One line per filesystem, named after the first folder on it
+  for id in "${ids[@]}"; do
+    p=$(folder_path "$id")
+    if [[ ! -d $p ]]; then
+      d_fail "folder $id: ${p/#"$HOME"/\~} does not exist"
+      continue
+    fi
+    read -r avail mount < <(df --output=avail,target -k "$p" | tail -1)
+    [[ -z ${seen_mount[$mount]-} ]] || continue
+    seen_mount[$mount]=1
+    free_gb=$((avail / 1048576))
+    if ((free_gb < DISK_WARN_GB)); then
+      d_warn "disk: only ${free_gb}GB free where ${p/#"$HOME"/\~} lives"
+    else
+      d_ok "disk: ${free_gb}GB free where ${p/#"$HOME"/\~} lives"
+    fi
+  done
 
   if command -v tailscale >/dev/null; then
     ts=$(timeout 10 tailscale status --json 2>/dev/null || true)
@@ -446,7 +661,13 @@ cmd_doctor() {
     fi
   fi
 
-  ! $roundtrip || doctor_roundtrip
+  if $roundtrip; then
+    for id in "${ids[@]}"; do
+      lab=""
+      if ((${#ids[@]} > 1)); then lab=" ($id)"; fi
+      doctor_roundtrip "$id" "$(folder_path "$id")" "$lab"
+    done
+  fi
   if ((doctor_fails > 0)); then
     echo "result: $doctor_fails problem(s)"
     return 1
@@ -457,25 +678,366 @@ cmd_doctor() {
   fi
 }
 
+# --- The mesh. Every host is a full peer: any one of them can be lost or replaced and the others
+# keep a complete copy. Peers are marked as introducers by default (they are all yours): add a new
+# host to ONE existing host and the others learn its ID and share the folder with it by themselves.
+# Syncthing does not pass addresses along, and psync switches discovery off, so two hosts that only
+# know each other through an introducer reach each other via that host until one of them is given
+# the other's address (add-host --address). `psync hosts` shows which is which.
+
+# put_device ID NAME ADDRESS INTRODUCER(true|false)   (replaces the whole device entry)
+put_device() {
+  api PUT "config/devices/$1" "$(jq -n --arg id "$1" --arg name "$2" --arg addr "$3" --argjson intro "$4" \
+    '{deviceID: $id, name: $name, addresses: [$addr], compression: "metadata", autoAcceptFolders: false, introducer: $intro}')" >/dev/null
+}
+
+# share_folders DEVICE_ID: add the device to every folder it is not in yet (a folder config change
+# restarts the folder and rescans it, so do not touch one for nothing). A host that has not added
+# a folder itself only gets an offer for it, which it can ignore.
+share_folders() {
+  local fid folder
+  for fid in $(folder_ids); do
+    folder=$(api GET "config/folders/$fid")
+    jq -e --arg id "$1" '.devices | any(.deviceID == $id)' <<<"$folder" >/dev/null && continue
+    api PUT "config/folders/$fid" "$(jq --arg id "$1" '.devices += [{deviceID: $id}]' <<<"$folder")" >/dev/null
+  done
+}
+
+# host_completion DEVICE_ID → the lowest completion over the folders shared with it that it has
+# added ("100%"), or "-" when none counts
+host_completion() {
+  local fid c comp best=""
+  for fid in $(folder_ids); do
+    [[ $(folder_peers "$fid") == *"$1"* ]] || continue
+    comp=$(api GET "db/completion?folder=$fid&device=$1")
+    ! not_sharing "$comp" || continue
+    c=$(jq -r '.completion | floor' <<<"$comp")
+    if [[ -z $best ]] || ((c < best)); then best=$c; fi
+  done
+  echo "${best:+$best%}"
+}
+
+# resolve_host NAME|ID → device ID of a configured peer
+resolve_host() {
+  local found
+  found=$(api GET config/devices | jq -r --arg t "$1" --arg me "$(my_id)" \
+    '.[] | select(.deviceID != $me and (.name == $t or .deviceID == $t)) | .deviceID')
+  [[ -n $found ]] || die "no host named or identified '$1' (see: psync hosts)"
+  [[ $(wc -l <<<"$found") == 1 ]] || die "'$1' matches more than one host, use its device ID"
+  echo "$found"
+}
+
+cmd_add_host() {
+  local id="" name="" addr=dynamic intro=true
+  while (($#)); do
+    case $1 in
+      --id) id=${2-}; shift 2 ;;
+      --name) name=${2-}; shift 2 ;;
+      --address) addr=${2-}; shift 2 ;;
+      --no-introducer) intro=false; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [[ $id =~ $DEVICE_ID_RE ]] || die "--id must be the other host's Syncthing device ID (8 groups of 7, from 'psync setup' or 'psync hosts' there)"
+  [[ -n $name ]] || die "--name is required"
+  [[ $id != "$(my_id)" ]] || die "that is this host's own device ID"
+  put_device "$id" "$name" "$addr" "$intro"
+  share_folders "$id"
+  echo "added host $name (${id:0:7}), reached via ${addr}$([[ $addr == dynamic ]] && echo ": it connects to this host, or through an introducer")"
+  echo "follow with: psync hosts"
+}
+
+cmd_remove_host() {
+  local target=${1-} id name answer fid folder
+  [[ -n $target ]] || die "usage: psync remove-host NAME|ID [--yes]"
+  shift
+  id=$(resolve_host "$target")
+  name=$(api GET "config/devices/$id" | jq -r .name)
+  if [[ ${1-} != --yes ]]; then
+    [[ -t 0 ]] || die "not a terminal: pass --yes to confirm removing $name"
+    read -r -p "Stop syncing with $name? Its copy of the files stays where it is. [y/N] " answer
+    [[ $answer == [yY]* ]] || { echo "aborted"; return 1; }
+  fi
+  for fid in $(folder_ids); do
+    folder=$(api GET "config/folders/$fid")
+    jq -e --arg id "$id" '.devices | any(.deviceID == $id)' <<<"$folder" >/dev/null || continue
+    api PUT "config/folders/$fid" "$(jq --arg id "$id" '.devices |= map(select(.deviceID != $id))' <<<"$folder")" >/dev/null
+  done
+  api DELETE "config/devices/$id" >/dev/null
+  echo "removed host $name (${id:0:7}); hosts that take this one as their introducer drop it too"
+}
+
+cmd_hosts() {
+  local me devs conns stats id name state seen synced via addr reach fmt width indirect=0
+  me=$(my_id)
+  devs=$(api GET config/devices)
+  conns=$(api GET system/connections)
+  stats=$(api GET stats/device)
+  width=$(jq -r '[.[].name | length + 7] + [16] | max' <<<"$devs")
+  fmt="%-${width}s %-8s %-10s %-7s %-20s %s\n"
+  # shellcheck disable=SC2059
+  printf "$fmt" HOST ID STATE SYNCED "LAST SEEN" "REACHED VIA"
+  for id in $(jq -r '.[].deviceID' <<<"$devs"); do
+    name=$(jq -r --arg id "$id" '.[] | select(.deviceID == $id) | .name' <<<"$devs")
+    if [[ $id == "$me" ]]; then
+      # shellcheck disable=SC2059
+      printf "$fmt" "$name (this)" "${id:0:7}" - - - -
+      continue
+    fi
+    via=$(jq -r --arg id "$id" '.[] | select(.deviceID == $id) | .introducedBy // ""' <<<"$devs")
+    addr=$(jq -r --arg id "$id" '.[] | select(.deviceID == $id) | .addresses | join(",")' <<<"$devs")
+    if [[ $(jq -r --arg id "$id" '.connections[$id].connected // false' <<<"$conns") == true ]]; then
+      state=connected
+      seen=now
+      synced=$(host_completion "$id")
+      synced=${synced:--}
+    else
+      state=offline
+      seen=$(last_seen "$id" "$stats")
+      synced=-
+    fi
+    if [[ $addr == dynamic ]]; then
+      if [[ -n $via ]]; then
+        reach="through $(jq -r --arg v "$via" '.[] | select(.deviceID == $v) | .name' <<<"$devs") (introduced)"
+        indirect=$((indirect + 1))
+      else
+        reach="it dials this host"
+      fi
+    else
+      reach=$addr
+    fi
+    # shellcheck disable=SC2059
+    printf "$fmt" "$name" "${id:0:7}" "$state" "$synced" "$seen" "$reach"
+  done
+  ((indirect == 0)) ||
+    echo "note: hosts reached only through an introducer stop syncing with this one when that host is off; give them a direct address with: psync add-host --id ID --name NAME --address tcp://HOST:22000"
+}
+
+# --- Folders beyond the base one. Sharing is opt-in on each host: `folder add` there, and a folder
+# is shared with every host this one knows (add-host shares every folder with a new host), so
+# the order in which hosts add it does not matter.
+
+# folder_json ID PATH DEVICES_JSON VERSIONING_JSON: a folder the way psync wants it on every host
+folder_json() {
+  api GET config/defaults/folder | jq --arg id "$1" --arg path "$2" --argjson devices "$3" --argjson versioning "$4" '. + {
+    id: $id, label: $id, path: $path, type: "sendreceive", devices: $devices,
+    order: "oldestFirst", fsWatcherEnabled: true, rescanIntervalS: 86400, maxConflicts: 10,
+    versioning: (.versioning + $versioning)
+  }'
+}
+
+cmd_folders() {
+  local id state fmt="%-12s %-14s %-6s %s\n" p
+  # shellcheck disable=SC2059
+  printf "$fmt" FOLDER STATE HOSTS PATH
+  for id in $(folder_ids); do
+    if [[ $(api GET "config/folders/$id" | jq -r .paused) == true ]]; then
+      state=paused
+    else
+      state=$(api GET "db/status?folder=$id" | jq -r .state)
+    fi
+    p=$(folder_path "$id")
+    # shellcheck disable=SC2059
+    printf "$fmt" "$id" "$state" "$(folder_peers "$id" | wc -l)" "${p/#"$HOME"/\~}"
+  done
+}
+
+# folder_add ID PATH | --preset claude|codex
+#   claude  the sessions and memory of Claude Code:  $CLAUDE_CONFIG_DIR or ~/.claude, then projects/
+#   codex   the sessions of Codex:                   $CODEX_HOME or ~/.codex, then sessions/
+# Only those directories, never the config dir around them, so logins and app databases cannot travel.
+folder_add() {
+  local fid="" fpath="" preset="" other opath devices
+  while (($#)); do
+    case $1 in
+      --preset) preset=${2-}; shift 2 ;;
+      -*) die "unknown option: $1" ;;
+      *) if [[ -z $fid ]]; then fid=$1; elif [[ -z $fpath ]]; then fpath=$1; else die "unexpected argument: $1"; fi; shift ;;
+    esac
+  done
+  if [[ -n $preset ]]; then
+    [[ -z $fid ]] || die "give either --preset or ID PATH, not both"
+    case $preset in
+      claude) fid=claude; fpath=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects ;;
+      codex) fid=codex; fpath=${CODEX_HOME:-$HOME/.codex}/sessions ;;
+      *) die "unknown preset '$preset' (claude, codex)" ;;
+    esac
+  fi
+  [[ -n $fid && -n $fpath ]] || die "usage: psync folder add ID PATH | add --preset claude|codex"
+  [[ $fid =~ $FOLDER_ID_RE ]] || die "folder ID must be lowercase letters, digits, '.', '_' or '-' (got '$fid')"
+  fpath=${fpath/#\~/$HOME}
+  fpath=${fpath%/}
+  [[ $fpath == /* ]] || die "PATH must be absolute (got '$fpath')"
+  ! api GET "config/folders/$fid" >/dev/null 2>&1 || die "folder '$fid' already exists (see: psync folders)"
+  # Syncthing cannot sync a folder inside another one, in either direction.
+  for other in $(folder_ids); do
+    opath=$(folder_path "$other")
+    opath=${opath%/}
+    if [[ $fpath == "$opath" || $fpath == "$opath"/* ]]; then
+      die "$fpath is already synced as part of folder $other ($opath)"
+    fi
+    if [[ $opath == "$fpath"/* ]]; then
+      die "folder $other ($opath) lives inside $fpath: a folder cannot contain another"
+    fi
+  done
+
+  mkdir -p "$fpath"
+  devices=$(api GET config/devices | jq -c '[.[] | {deviceID: .deviceID}]')
+  api PUT "config/folders/$fid" "$(folder_json "$fid" "$fpath" "$devices" "$(jq -n \
+    --arg dir "$VERSIONS_DIR/$fid" --arg days "$VERSIONS_DAYS" \
+    '{type: "trashcan", params: {cleanoutDays: $days}, fsPath: $dir, cleanupIntervalS: 3600}')")" >/dev/null
+  echo "added folder $fid: ${fpath/#"$HOME"/\~}, shared with $(($(jq length <<<"$devices") - 1)) other host(s)"
+  echo "it syncs with each host once that host runs the same command; follow with: psync folders"
+}
+
+folder_remove() {
+  local fid=${1-} answer
+  [[ -n $fid ]] || die "usage: psync folder remove ID [--yes]"
+  shift
+  api GET "config/folders/$fid" >/dev/null 2>&1 || die "no folder '$fid' (see: psync folders)"
+  [[ $fid != "$FOLDER_ID" ]] || die "$fid is the base folder: to stop syncing it use psync pause"
+  if [[ ${1-} != --yes ]]; then
+    [[ -t 0 ]] || die "not a terminal: pass --yes to confirm removing folder $fid"
+    read -r -p "Stop syncing folder $fid on this host? The files stay where they are. [y/N] " answer
+    [[ $answer == [yY]* ]] || { echo "aborted"; return 1; }
+  fi
+  api DELETE "config/folders/$fid" >/dev/null
+  echo "removed folder $fid from this host; the other hosts keep it until they remove it too"
+}
+
+cmd_folder() {
+  local action=${1-}
+  [[ -z $action ]] || shift
+  case $action in
+    add) folder_add "$@" ;;
+    remove) folder_remove "$@" ;;
+    *) die "usage: psync folder add ID PATH | add --preset claude|codex | remove ID [--yes]" ;;
+  esac
+}
+
+set_paused() { # true|false
+  local id
+  for id in $(folder_ids); do api PATCH "config/folders/$id" "{\"paused\": $1}" >/dev/null; done
+}
+
+# --- Ignore profiles: named rule sets that ship with the package (~/.config/psync/profiles/NAME).
+# With ignore_profile set, psync writes the profile into <folder>/.stignore itself, so a folder
+# needs no file of rules inside it. The first line marks the file as psync's.
+
+profile_names() { (cd "$PROFILES_DIR" 2>/dev/null && printf '%s ' *) || true; }
+
+# profile_stignore: the exact text .stignore must hold for the chosen profile
+profile_stignore() {
+  local f="$PROFILES_DIR/$IGNORE_PROFILE"
+  [[ -r $f ]] || die "no ignore profile '$IGNORE_PROFILE' in ${PROFILES_DIR/#"$HOME"/\~} (have: $(profile_names))"
+  printf '// managed by psync (ignore_profile=%s): change the setting or the profile, not this file\n' "$IGNORE_PROFILE"
+  cat "$f"
+}
+
+# --- This host's settings. The file is optional: without it the defaults above apply, which are
+# the layout of the PC and the VPS. Nothing in it needs to be the same on every host.
+
+cmd_config() {
+  local key var val
+  if [[ -e $CONFIG_FILE ]]; then
+    echo "settings file: ${CONFIG_FILE/#"$HOME"/\~}"
+  else
+    echo "settings file: none, the defaults apply (psync init writes ${CONFIG_FILE/#"$HOME"/\~})"
+  fi
+  for key in "${CONFIG_KEYS[@]}"; do
+    var=${key^^}
+    val=${!var}
+    val=${val/#"$HOME"/\~}
+    printf '  %-22s %-46s %s\n' "$key" "${val:-none}" "${CONFIG_SRC[$key]}"
+  done
+}
+
+# config_line KEY CHOSEN COMMENT: one documented setting; commented out unless it was chosen
+config_line() {
+  local var=${1^^} val
+  val=${!var}
+  [[ ($1 != ignore_include && $1 != ignore_profile) || -n $val ]] || val=none
+  val=${val/#"$HOME"/\~}
+  printf '# %s\n' "$3"
+  if [[ $2 == chosen ]]; then printf '%s=%s\n\n' "$1" "$val"; else printf '# %s=%s\n\n' "$1" "$val"; fi
+}
+
+cmd_init() {
+  local path="" inc="" prof="" force=false folder_state=default ignore_state=default profile_state=default
+  while (($#)); do
+    case $1 in
+      --folder-path) path=${2-}; shift 2 ;;
+      --ignore-include) inc=${2-}; shift 2 ;;
+      --ignore-profile) prof=${2-}; shift 2 ;;
+      --force) force=true; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [[ ! -e $CONFIG_FILE ]] || $force ||
+    die "${CONFIG_FILE/#"$HOME"/\~} already exists (psync config shows it; --force replaces it)"
+  [[ -z $inc || -z $prof ]] || die "--ignore-include and --ignore-profile are alternatives, give only one"
+  if [[ -n $path ]]; then set_setting folder_path "$path" "--folder-path"; folder_state=chosen; fi
+  if [[ -n $inc ]]; then set_setting ignore_include "$inc" "--ignore-include"; ignore_state=chosen; fi
+  if [[ -n $prof ]]; then
+    set_setting ignore_profile "$prof" "--ignore-profile"
+    profile_state=chosen
+    if [[ -n $IGNORE_PROFILE ]]; then
+      [[ -r $PROFILES_DIR/$IGNORE_PROFILE ]] ||
+        die "no ignore profile '$IGNORE_PROFILE' in ${PROFILES_DIR/#"$HOME"/\~} (have: $(profile_names))"
+      set_setting ignore_include none "--ignore-profile"
+      ignore_state=chosen
+    fi
+  fi
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+  {
+    echo "# psync settings for this host: KEY=VALUE, one per line, no quotes. A line starting with # is a"
+    echo "# comment. Written by \`psync init\`; \`psync config\` shows what is in effect. A commented line shows"
+    echo "# the default. Nothing here has to match the other hosts (the folder id, which must, is fixed)."
+    echo
+    config_line folder_path "$folder_state" "The base folder to sync. Its path may differ from host to host."
+    config_line ignore_include "$ignore_state" "Ignore rules for it: a file inside the folder that syncs along (relative path), or none to leave .stignore alone."
+    config_line ignore_profile "$profile_state" "Or a named rule set psync writes into .stignore for you (generic), instead of the include. Set one of the two."
+    config_line versions_days default "Days a replaced or deleted file stays recoverable."
+    config_line disk_warn_gb default "psync doctor warns below this much free disk space (GB)."
+    config_line disconnect_warn_hours default "psync check warns when a host has been unreachable this long (hours)."
+    config_line backup_min_free_gb default "psync backup takes no snapshot below this much free space (GB)."
+    config_line backup_stale_hours default "psync ready and doctor warn when the last backup is older than this (hours)."
+  } >"$CONFIG_FILE"
+  echo "wrote ${CONFIG_FILE/#"$HOME"/\~}; check it with: psync config"
+}
+
 cmd_setup() {
-  local peer_id="" peer_name="" peer_address=dynamic listen="tcp://:22000"
+  local peer_id="" peer_name="" peer_address=dynamic listen="" intro=true
   while (($#)); do
     case $1 in
       --peer-id) peer_id=$2; shift 2 ;;
       --peer-name) peer_name=$2; shift 2 ;;
       --peer-address) peer_address=$2; shift 2 ;;
       --listen) listen=$2; shift 2 ;;
+      --no-introducer) intro=false; shift ;;
       *) die "unknown option: $1" ;;
     esac
   done
 
   mkdir -p "$FOLDER_PATH"
-  [[ -r $FOLDER_PATH/$IGNORE_INCLUDE ]] ||
-    die "missing $FOLDER_PATH/$IGNORE_INCLUDE — copy it from another host before the first sync"
-  local stignore="#include $IGNORE_INCLUDE"
-  if [[ "$(cat "$FOLDER_PATH/.stignore" 2>/dev/null)" != "$stignore" ]]; then
-    [[ ! -e $FOLDER_PATH/.stignore ]] || cp "$FOLDER_PATH/.stignore" "$FOLDER_PATH/.stignore.bak"
-    echo "$stignore" >"$FOLDER_PATH/.stignore"
+  if [[ -n $IGNORE_PROFILE ]]; then
+    local want
+    want=$(profile_stignore)
+    if [[ "$(cat "$FOLDER_PATH/.stignore" 2>/dev/null)" != "$want" ]]; then
+      # Keep what someone wrote there, but not our own earlier version of it
+      if [[ -e $FOLDER_PATH/.stignore && $(head -n1 "$FOLDER_PATH/.stignore") != "// managed by psync"* ]]; then
+        cp "$FOLDER_PATH/.stignore" "$FOLDER_PATH/.stignore.bak"
+      fi
+      printf '%s\n' "$want" >"$FOLDER_PATH/.stignore"
+    fi
+  elif [[ -n $IGNORE_INCLUDE ]]; then
+    [[ -r $FOLDER_PATH/$IGNORE_INCLUDE ]] ||
+      die "missing $FOLDER_PATH/$IGNORE_INCLUDE — copy it from another host before the first sync"
+    local stignore="#include $IGNORE_INCLUDE"
+    if [[ "$(cat "$FOLDER_PATH/.stignore" 2>/dev/null)" != "$stignore" ]]; then
+      [[ ! -e $FOLDER_PATH/.stignore ]] || cp "$FOLDER_PATH/.stignore" "$FOLDER_PATH/.stignore.bak"
+      echo "$stignore" >"$FOLDER_PATH/.stignore"
+    fi
   fi
 
   [[ -r $ST_HOME/config.xml ]] || syncthing generate --home="$ST_HOME" --no-port-probing >/dev/null
@@ -487,32 +1049,44 @@ cmd_setup() {
   done
   $up || die "Syncthing API did not come up (journalctl --user -u syncthing)"
 
+  # Pointing an existing folder at another path makes Syncthing read the new directory as the
+  # folder's content: if it is empty, everything looks deleted, and that travels to every host.
+  # A directory that was moved here carries its .stfolder marker; a new empty one does not.
+  local current
+  if current=$(api GET "config/folders/$FOLDER_ID" 2>/dev/null); then
+    current=$(jq -r .path <<<"$current")
+    current=${current/#\~/$HOME}
+    [[ ${current%/} == "$FOLDER_PATH" || -e $FOLDER_PATH/.stfolder ]] ||
+      die "folder $FOLDER_ID already syncs ${current/#"$HOME"/\~} and folder_path says ${FOLDER_PATH/#"$HOME"/\~}, which is not a Syncthing folder (no .stfolder). To move it without Syncthing seeing deletions: psync pause, mv the directory to the new path, then run psync setup again"
+  fi
+
+  # The listen address is chosen on the first run (or with --listen) and kept when setup is run again,
+  # so repeating setup to repoint or refresh the folder never changes who can reach this host.
+  if [[ -z $listen && $(api GET config/options | jq -r '.listenAddresses | join(",")') == default ]]; then
+    listen="tcp://:22000"
+  fi
   api PATCH config/options "$(jq -n --arg listen "$listen" '{
-    listenAddresses: [$listen],
     globalAnnounceEnabled: false, localAnnounceEnabled: false,
     relaysEnabled: false, natEnabled: false,
     urAccepted: -1, crashReportingEnabled: false, autoUpgradeIntervalH: 0
-  }')" >/dev/null
+  } + (if $listen == "" then {} else {listenAddresses: [$listen]} end)')" >/dev/null
   api DELETE config/folders/default >/dev/null 2>&1 || true
 
   local devices existing folder
   devices=$(jq -n --arg me "$(my_id)" '[{deviceID: $me}]')
   if [[ -n $peer_id ]]; then
-    api PUT "config/devices/$peer_id" "$(jq -n --arg id "$peer_id" --arg name "${peer_name:-$peer_id}" \
-      --arg addr "$peer_address" \
-      '{deviceID: $id, name: $name, addresses: [$addr], compression: "metadata", autoAcceptFolders: false}')" >/dev/null
+    put_device "$peer_id" "${peer_name:-$peer_id}" "$peer_address" "$intro"
     devices=$(jq --arg id "$peer_id" '. + [{deviceID: $id}]' <<<"$devices")
   fi
   if existing=$(api GET "config/folders/$FOLDER_ID" 2>/dev/null); then
     devices=$(jq --argjson new "$devices" '.devices + $new | unique_by(.deviceID)' <<<"$existing")
   fi
 
-  folder=$(api GET config/defaults/folder | jq --arg id "$FOLDER_ID" --arg path "$FOLDER_PATH" \
-    --argjson devices "$devices" --arg maxAge "$VERSIONS_MAX_AGE" '. + {
-      id: $id, label: $id, path: $path, type: "sendreceive", devices: $devices,
-      order: "oldestFirst", fsWatcherEnabled: true, rescanIntervalS: 86400, maxConflicts: 10,
-      versioning: (.versioning + {type: "staggered", params: {maxAge: $maxAge}, cleanupIntervalS: 3600})
-    }')
+  # Trashcan, not staggered: staggered archives a file again every ~30s for the first hour, so a
+  # transcript that grows all day piled up 17 copies of 197MB in one hour. Trashcan keeps the last
+  # version of what was replaced or deleted, for versions_days. restic has the history beyond that.
+  folder=$(folder_json "$FOLDER_ID" "$FOLDER_PATH" "$devices" \
+    "$(jq -n --arg days "$VERSIONS_DAYS" '{type: "trashcan", params: {cleanoutDays: $days}, cleanupIntervalS: 3600}')")
   api PUT "config/folders/$FOLDER_ID" "$folder" >/dev/null
 
   # Headless hosts have no notify-send: the timer still runs the settle scan and tidy-up.
@@ -520,22 +1094,35 @@ cmd_setup() {
   echo "This device: $(my_id)"
 }
 
+# Help and init have to work with a settings file that does not exist yet or is broken.
+case ${1:-status} in
+  -h | --help | help | init) ;;
+  *) load_config ;;
+esac
+
 case ${1:-status} in
   status) cmd_status ;;
   wait) shift; cmd_wait "$@" ;;
   ready) shift; cmd_ready "$@" ;;
   backup) shift; cmd_backup "$@" ;;
   conflicts) conflict_files ;;
-  pause) api PATCH "config/folders/$FOLDER_ID" '{"paused": true}' >/dev/null && echo "paused — resume with: psync resume" ;;
+  pause) set_paused true && echo "paused — resume with: psync resume" ;;
   resume)
     systemctl --user start syncthing.service
     for _ in $(seq 30); do api GET system/ping >/dev/null 2>&1 && break; sleep 1; done
-    api PATCH "config/folders/$FOLDER_ID" '{"paused": false}' >/dev/null && echo "resumed — follow with: psync status"
+    set_paused false && echo "resumed — follow with: psync status"
     ;;
   check) cmd_check ;;
   doctor) shift; cmd_doctor "$@" ;;
+  hosts) cmd_hosts ;;
+  add-host) shift; cmd_add_host "$@" ;;
+  remove-host) shift; cmd_remove_host "$@" ;;
+  folders) cmd_folders ;;
+  folder) shift; cmd_folder "$@" ;;
+  init) shift; cmd_init "$@" ;;
+  config) cmd_config ;;
   tidy) park_index_conflicts ;;
   setup) shift; cmd_setup "$@" ;;
-  -h | --help | help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h | --help | help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (see psync --help)" ;;
 esac

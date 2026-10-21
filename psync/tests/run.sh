@@ -61,12 +61,13 @@ chmod +x "$T/bin/"*
 
 psync() {
   env -u XDG_STATE_HOME -u XDG_DATA_HOME -u STHOMEDIR HOME="$H" PATH="$T/bin:$PATH" \
+    CLAUDE_CONFIG_DIR="${T_CLAUDE_CONFIG_DIR-}" CODEX_HOME="${T_CODEX_HOME-}" \
     PSYNC_ROUNDTRIP_TIMEOUT="${RT:-90}" PSYNC_DISK_WARN_GB=1 "$PSYNC" "$@"
 }
 
 serve() { # SCENARIO
   stop
-  python3 -I "$HERE/fake-syncthing.py" "$PORT" "$1" &
+  FAKE_LOG="$T/fake.log" python3 -I "$HERE/fake-syncthing.py" "$PORT" "$1" "$H" &
   SERVER=$!
   for _ in $(seq 50); do
     curl -fs "http://127.0.0.1:$PORT/rest/system/ping" >/dev/null 2>&1 && return
@@ -78,7 +79,7 @@ serve() { # SCENARIO
 
 run() { # psync ARGS... → $out $rc $secs
   local start=$SECONDS
-  out=$(psync "$@" 2>&1)
+  out=$(psync "$@" 2>&1 </dev/null)
   rc=$?
   secs=$((SECONDS - start))
 }
@@ -167,6 +168,244 @@ compgen -G "$H/projects/.psync-canary-*" >/dev/null && no "the canary file is re
 serve stuck;   RT=4 run doctor --roundtrip; check "a canary that never arrives fails" 1 "roundtrip: the canary did not reach pc within 4s"
 serve offline; run doctor --roundtrip;      check "no connected peer: says so" 1 "roundtrip: no peer is connected"
 stop
+
+echo "hosts"
+VALID_ID=AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH
+serve quiet;   run hosts; check "lists this host and its peer with how much it has" 0 "me (this)" "pc" "connected" "100%" "tcp://100.64.0.1:22000"
+serve offline; run hosts; check "an offline peer shows when it was last seen" 0 "offline" "2026-10-20T09:00:00"
+serve quiet
+run add-host --id NOTANID --name x;       check "add-host rejects a malformed device ID" 1 "must be the other host's Syncthing device ID"
+run add-host --id "$VALID_ID";            check "add-host needs a name" 1 "--name is required"
+run remove-host;                          check "remove-host needs an argument" 1 "usage: psync remove-host"
+run remove-host nobody --yes;             check "remove-host refuses an unknown host" 1 "no host named or identified 'nobody'"
+run remove-host pc;                       check "remove-host does not guess without a terminal" 1 "pass --yes"
+stop
+
+echo "folders (a host that syncs more than one)"
+mkdir -p "$H/.claude/projects"
+logged() { out=$(cat "$T/fake.log"); rc=0; }   # the writes the last command sent to the fake Syncthing
+serve multi;           run status; check "each line says which folder it is about" 0 "[projects] idle" "[claude] idle" "in sync" "!NOT in sync"
+serve multi-busy;      run status; check "a second folder with items to pull: not in sync" 1 "[projects] idle" "[claude] syncing" "NOT in sync"
+serve multi-paused;    run status; check "one paused folder is reported" 1 "[claude] PAUSED"
+serve multi-notshared; run status; check "a peer that has not added a folder is mentioned, not an error" 0 "[claude] pc connected, but has not added this folder" "!NOT in sync"
+serve quiet;           run status; check "one folder: the lines stay unlabelled" 0 "folder:    idle" "!["
+serve multi-busy;      run ready;  check "ready waits for every folder" 0 "catching up" "caught up"
+serve multi-paused;    run ready;  check "ready skips a paused folder" 0 "!psync:"
+serve multi;           run doctor; check "healthy host with two folders" 0 "result: all good" "!FAIL" "!warn"
+[[ $(grep -c '  ok    disk:' <<<"$out") == 1 ]] && ok "doctor: one disk line per filesystem" || no "doctor: one disk line per filesystem"
+serve multi-paused;    run doctor; check "doctor names the paused folder" 1 "FAIL  folder claude is paused"
+serve multi-notshared; run doctor; check "doctor warns about a peer that has not added a folder" 0 "  warn  a peer has not added a folder" "result: no failures, 1 warning(s)"
+serve multi;           run doctor --roundtrip
+check "a canary goes through every folder" 0 "roundtrip (projects): a canary file reached" "roundtrip (claude): a canary file reached"
+compgen -G "$H/.claude/projects/.psync-canary-*" >/dev/null && no "the canary is removed from the second folder too" || ok "the canary is removed from the second folder too"
+serve multi-notshared; run doctor --roundtrip
+check "no canary for a folder the peer has not added" 0 "roundtrip (projects): a canary file reached" "roundtrip (claude): no connected peer has added this folder yet" "result: no failures, 2 warning(s)"
+serve multi;           run folders; check "folders lists each folder and where it lives" 0 "FOLDER" "projects" "~/projects" "claude" "~/.claude/projects"
+serve multi;           run hosts;   check "hosts shows how much of its folders each host has" 0 "pc" "100%"
+
+echo "folder add / remove"
+serve quiet
+run folder;                                  check "folder needs an action" 1 "usage: psync folder"
+run folder add;                              check "folder add needs an ID and a PATH" 1 "usage: psync folder add"
+run folder add Bad_ID /x;                    check "folder add rejects a malformed ID" 1 "folder ID must be"
+run folder add x rel/path;                   check "folder add wants an absolute path" 1 "must be absolute"
+run folder add --preset nope;                check "folder add rejects an unknown preset" 1 "unknown preset"
+run folder add --preset claude x /y;         check "folder add takes a preset or ID PATH, not both" 1 "either --preset or ID PATH"
+run folder add inside "$H/projects/sub";     check "a folder inside another one is refused" 1 "already synced as part of folder projects"
+run folder add outer "$H";                   check "a folder that contains another one is refused" 1 "lives inside"
+T_CLAUDE_CONFIG_DIR="$H/projects/cc" run folder add --preset claude
+check "the preset follows CLAUDE_CONFIG_DIR, and is refused inside a synced folder" 1 "already synced as part of folder projects"
+run folder remove projects --yes;            check "the base folder cannot be removed" 1 "base folder"
+run folder remove nothere --yes;             check "folder remove refuses an unknown folder" 1 "no folder 'nothere'"
+serve multi
+run folder add claude /tmp/other;            check "folder add refuses an existing ID" 1 "already exists"
+run folder remove claude;                    check "folder remove does not guess without a terminal" 1 "pass --yes"
+
+serve quiet
+: >"$T/fake.log"
+run folder add --preset claude
+check "folder add --preset claude" 0 "added folder claude: ~/.claude/projects, shared with 1 other host(s)"
+[[ -d $H/.claude/projects ]] && ok "the folder directory exists" || no "the folder directory exists"
+logged
+check "the new folder is sent to Syncthing as sendreceive, shared with the known hosts" 0 \
+  'PUT config/folders/claude' '"id":"claude"' "\"path\":\"$H/.claude/projects\"" '"type":"sendreceive"' '"deviceID":"PEER"' '"deviceID":"ME"'
+check "its old versions go outside the folder, to a trashcan" 0 \
+  '"type":"trashcan"' "\"fsPath\":\"$H/.local/state/psync/versions/claude\"" '"cleanoutDays":"30"'
+: >"$T/fake.log"
+T_CODEX_HOME="$H/codex-home" run folder add --preset codex
+check "folder add --preset codex follows CODEX_HOME" 0 "added folder codex"
+logged
+check "codex syncs its sessions directory only" 0 "\"path\":\"$H/codex-home/sessions\""
+: >"$T/fake.log"
+serve multi
+run folder remove claude --yes;              check "folder remove" 0 "removed folder claude"
+logged
+check "folder remove deletes just that folder from Syncthing" 0 'DELETE config/folders/claude'
+
+echo "folders: pause, resume and hosts act on all of them"
+serve multi; : >"$T/fake.log"
+run pause;  check "pause" 0 "paused"
+logged;     check "pause pauses every folder" 0 'PATCH config/folders/projects {"paused":true}' 'PATCH config/folders/claude {"paused":true}'
+: >"$T/fake.log"
+run resume; check "resume" 0 "resumed"
+logged;     check "resume resumes every folder" 0 'PATCH config/folders/projects {"paused":false}' 'PATCH config/folders/claude {"paused":false}'
+: >"$T/fake.log"
+run add-host --id "$VALID_ID" --name friend; check "add-host" 0 "added host friend"
+logged;     check "add-host shares every folder with the new host" 0 \
+  "PUT config/folders/projects" "PUT config/folders/claude" "\"deviceID\":\"$VALID_ID\""
+: >"$T/fake.log"
+run remove-host pc --yes; check "remove-host" 0 "removed host pc"
+logged;     check "remove-host leaves every folder" 0 "PUT config/folders/projects" "PUT config/folders/claude" 'DELETE config/devices/PEER'
+run help;   check "help lists the folder commands" 0 "psync folders" "psync folder add" "psync folder remove"
+run help;   check "help lists the settings commands" 0 "psync init" "psync config"
+stop
+
+echo "settings (~/.config/psync/config)"
+CFG=$H/.config/psync/config
+serve quiet
+run config;  check "without a file the defaults apply" 0 "settings file: none" "folder_path" "~/projects" "default" "!settings file: ~"
+run init;    check "init writes the file" 0 "wrote ~/.config/psync/config"
+grep -q '^# folder_path=~/projects$' "$CFG" && grep -q '^# versions_days=30$' "$CFG" && ! grep -q '^[a-z_]*=' "$CFG" &&
+  ok "init leaves every default commented out" || no "init leaves every default commented out"
+run init;    check "init does not overwrite" 1 "already exists"
+run init --force --folder-path "$H/code" --ignore-include none
+check "init --force takes the choices from its flags" 0 "wrote"
+grep -qx 'folder_path=~/code' "$CFG" && grep -qx 'ignore_include=none' "$CFG" && ok "the chosen values are written, with ~" || no "the chosen values are written, with ~"
+run config;  check "config shows the file and where each value comes from" 0 "settings file: ~/.config/psync/config" "~/code" "none" "file" "default"
+run init --force --folder-path code;       check "init rejects a relative path" 1 "folder_path must be an absolute path"
+run init --force --ignore-include /etc/x;  check "init rejects an ignore file outside the folder" 1 "ignore_include is a path inside the folder"
+run init --force --bogus;                  check "init rejects an unknown option" 1 "unknown option"
+rm -f "$CFG"
+
+bad() { # NAME CONTENT TEXT: a settings file that every command must refuse, naming the problem
+  printf '%s\n' "$2" >"$CFG"
+  run status
+  check "settings: $1" 1 "$3"
+}
+bad "an unknown setting names its line" $'# fine\ncolour=blue' "line 2: unknown setting 'colour'"
+bad "a line without =" "just words" "expected KEY=VALUE"
+bad "a number must be a number" "disk_warn_gb=lots" "disk_warn_gb must be a whole number"
+bad "versions_days cannot be 0" "versions_days=0" "versions_days must be a whole number of days"
+bad "folder_path must be absolute" "folder_path=code" "folder_path must be an absolute path"
+bad "the ignore file stays inside the folder" "ignore_include=../x" "ignore_include is a path inside the folder"
+bad "a value is data, never run" "folder_path=\$(touch $T/pwned)" "folder_path must be an absolute path"
+[[ ! -e $T/pwned ]] && ok "settings: a value with \$(...) was not executed" || no "settings: a value with \$(...) was not executed"
+printf 'colour=blue\n' >"$CFG"
+run help;  check "help works with a broken settings file" 0 "psync status"
+printf '  folder_path = ~/projects  \n\n# a comment\n' >"$CFG"
+run config; check "spaces around the key and value, comments and blank lines are fine" 0 "~/projects" "file"
+
+printf 'versions_days=7\n' >"$CFG"
+: >"$T/fake.log"
+run folder add --preset claude; check "versions_days reaches the folders it adds" 0 "added folder claude"
+logged;                         check "…as the trashcan's clean-out time" 0 '"cleanoutDays":"7"'
+printf 'ignore_include=none\n' >"$CFG"
+mv "$H/projects/.stignore" "$H/projects/.stignore.off"
+run doctor; check "ignore_include none: psync leaves .stignore alone" 0 "ignore rules: ~/projects/.stignore is yours" "!FAIL"
+mv "$H/projects/.stignore.off" "$H/projects/.stignore"
+printf 'folder_path=%s/code\nignore_include=none\n' "$H" >"$CFG"
+run doctor; check "doctor notices a folder_path that Syncthing does not use" 1 "FAIL  folder_path says ~/code but Syncthing syncs ~/projects as folder projects"
+run setup;  check "setup will not repoint a folder to a directory that is not a Syncthing folder" 1 "folder projects already syncs ~/projects and folder_path says ~/code" "no .stfolder" "psync pause"
+mkdir -p "$H/code" && : >"$H/code/.stfolder" && : >"$T/fake.log"
+run setup;  check "…but a directory that was moved there (it has .stfolder) is fine" 0 "This device: ME"
+logged;     check "…and the folder is repointed" 0 'PUT config/folders/projects' "\"path\":\"$H/code\""
+rm -f "$CFG"
+PSYNC_DISK_WARN_GB=3 run config; check "PSYNC_DISK_WARN_GB wins over the file and the default" 0 "disk_warn_gb" "env"
+stop
+
+echo "ignore profiles"
+PROFILE_SRC=$HERE/../.config/psync/profiles/generic
+mkdir -p "$H/.config/psync/profiles" && cp "$PROFILE_SRC" "$H/.config/psync/profiles/generic"
+grep -q '^(?d)node_modules$' "$PROFILE_SRC" && grep -q '^\.git/\*\*\.lock$' "$PROFILE_SRC" && grep -q '^\*\.sqlite-wal$' "$PROFILE_SRC" &&
+  ok "the generic profile ignores dependencies, git locks and SQLite companions" || no "the generic profile ignores dependencies, git locks and SQLite companions"
+grep -qx '#include profiles/generic' "$HERE/../.config/psync/stignore" &&
+  ok "the shared stignore takes those rules from the profile (one source)" || no "the shared stignore takes those rules from the profile (one source)"
+serve quiet
+run init --ignore-profile generic;     check "init --ignore-profile" 0 "wrote"
+grep -qx 'ignore_profile=generic' "$CFG" && grep -qx 'ignore_include=none' "$CFG" &&
+  ok "…writes the profile and turns the include off with it" || no "…writes the profile and turns the include off with it"
+run init --force --ignore-profile nope;                          check "init rejects a profile that does not exist" 1 "no ignore profile 'nope'" "have: generic"
+run init --force --ignore-profile "Bad Name";                    check "init rejects a malformed profile name" 1 "profile name"
+run init --force --ignore-profile generic --ignore-include x/y;  check "a profile and an include are alternatives" 1 "alternatives"
+printf 'ignore_include=a/b\nignore_profile=generic\n' >"$CFG"
+run status;                            check "…also in the file" 1 "alternatives"
+printf 'ignore_profile=generic\n' >"$CFG"
+run config;                            check "a profile alone needs no ignore_include=none" 0 "ignore_profile" "generic"
+grep -qE '^  ignore_include +none ' <<<"$out" && ok "…the include is off by itself" || no "…the include is off by itself"
+
+cp "$H/projects/.stignore" "$T/stignore.mine"
+run setup;                             check "setup with a profile" 0 "This device: ME"
+[[ $(cat "$H/projects/.stignore.bak") == "$(cat "$T/stignore.mine")" ]] && ok "…keeps the .stignore that was there" || no "…keeps the .stignore that was there"
+{ head -n1 "$H/projects/.stignore" | grep -q '^// managed by psync (ignore_profile=generic)'; } && grep -q '^(?d)node_modules$' "$H/projects/.stignore" &&
+  ok "…and writes the profile into .stignore" || no "…and writes the profile into .stignore"
+rm -f "$H/projects/.stignore.bak"
+run setup;                             check "setup again" 0 "This device: ME"
+[[ ! -e $H/projects/.stignore.bak ]] && ok "…does not back up its own file" || no "…does not back up its own file"
+run doctor;                            check "doctor: the profile is in place" 0 "ignore rules: ~/projects/.stignore holds the 'generic' profile" "!FAIL"
+echo "// someone's edit" >>"$H/projects/.stignore"
+run doctor;                            check "doctor: an edited .stignore fails" 1 "FAIL  ignore rules: ~/projects/.stignore is not the 'generic' profile"
+mv "$H/.config/psync/profiles/generic" "$T/generic.away"
+run doctor;                            check "doctor: a missing profile fails" 1 "FAIL  ignore rules: no profile 'generic'"
+mv "$T/generic.away" "$H/.config/psync/profiles/generic"
+cp "$T/stignore.mine" "$H/projects/.stignore"
+rm -f "$CFG"
+stop
+
+echo "setup: safe to run again"
+serve quiet; : >"$T/fake.log"
+run setup;  check "setup on a host that is already set up" 0 "This device: ME"
+logged;     check "…leaves its listen address alone" 0 "PATCH config/options" "!listenAddresses"
+check "…and keeps old versions in a trashcan, not staggered" 0 '"type":"trashcan"' '"cleanoutDays":"30"' "!staggered"
+: >"$T/fake.log"
+run setup --listen tcp://127.0.0.1:23000; logged
+check "--listen changes the listen address" 0 '"listenAddresses":["tcp://127.0.0.1:23000"]'
+serve firstsetup; : >"$T/fake.log"
+run setup;  logged
+check "the first setup listens on port 22000" 0 '"listenAddresses":["tcp://:22000"]'
+serve staggered; run doctor
+check "doctor warns about a base folder that still archives with staggered versioning" 0 "  warn  folder projects keeps old versions with 'staggered'" "psync setup"
+serve quiet; run doctor; check "…and not about a trashcan" 0 "!keeps old versions"
+stop
+
+echo "install.sh (--plan only: nothing is installed)"
+# A home whose ~/projects/dotfiles is this checkout, and a PATH with none of the tools psync needs
+mkdir -p "$T/ihome/projects" "$T/minbin"
+ln -s "$(cd "$HERE/../.." && pwd -P)" "$T/ihome/projects/dotfiles"
+for tool in dirname basename sed cat; do ln -sf "$(command -v $tool)" "$T/minbin/$tool"; done
+printf 'ID=ubuntu\nID_LIKE=debian\n' >"$T/os-debian"
+printf 'ID=arch\n' >"$T/os-arch"
+printf 'ID=plan9\n' >"$T/os-other"
+printf '#!/bin/sh\necho "syncthing v${FAKE_ST_VERSION:-2.1.0} fake"\n' >"$T/minbin/syncthing"
+chmod +x "$T/minbin/syncthing"
+plan() { # OS-FILE [install.sh args...]
+  local osf=$1
+  shift
+  out=$(env -i HOME="$T/ihome" USER=tester PATH="$T/minbin" PSYNC_OS_RELEASE="$osf" FAKE_ST_VERSION="${FAKE_ST_VERSION:-}" \
+    "$BASH" "${INSTALL_SH:-$HERE/../install.sh}" --plan "$@" 2>&1 </dev/null)
+  rc=$?
+}
+mv "$T/minbin/syncthing" "$T/syncthing.shim"
+plan "$T/os-debian"
+check "debian: adds the Syncthing 2 repository and installs everything missing" 0 "stable-v2" "apt-get update" "apt-get install -y jq curl stow git syncthing" "stow --no-folding" "enable-linger"
+plan "$T/os-debian" --with-backup
+check "debian: --with-backup also asks for restic and openssl" 0 "jq curl stow git restic openssl syncthing"
+plan "$T/os-arch"
+check "arch: installs with pacman, no apt repository" 0 "pacman -S --needed --noconfirm jq curl stow git syncthing" "!apt-get" "!stable-v2"
+plan "$T/os-other"
+check "an unsupported distribution says what to install by hand" 1 "unsupported distribution" "syncthing (2 or newer)"
+cp "$T/syncthing.shim" "$T/minbin/syncthing"
+plan "$T/os-debian"
+check "debian with Syncthing 2 already there: no extra repository" 0 "apt-get install -y jq curl stow git" "!stable-v2" "!syncthing"
+FAKE_ST_VERSION=1.29.5 plan "$T/os-debian"
+check "debian with Syncthing 1.x: still adds the 2.x repository" 0 "stable-v2" "syncthing"
+rm -f "$T/minbin/syncthing"
+mkdir -p "$T/elsewhere/psync" "$T/elsewhere/other-name"
+cp "$HERE/../install.sh" "$T/elsewhere/psync/install.sh"
+cp "$HERE/../install.sh" "$T/elsewhere/other-name/install.sh"
+INSTALL_SH="$T/elsewhere/psync/install.sh" plan "$T/os-debian"
+check "the package can live anywhere, not only in ~/projects/dotfiles" 0 "stow --no-folding --dir=$T/elsewhere --target=$T/ihome psync" "!projects/dotfiles"
+INSTALL_SH="$T/elsewhere/other-name/install.sh" plan "$T/os-debian"
+check "a directory not called psync is refused (stow links by directory name)" 1 "keep the directory called psync"
 
 echo "vps/install.sh"
 V=$T/vps-home
