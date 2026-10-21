@@ -61,12 +61,13 @@ chmod +x "$T/bin/"*
 
 psync() {
   env -u XDG_STATE_HOME -u XDG_DATA_HOME -u STHOMEDIR HOME="$H" PATH="$T/bin:$PATH" \
+    CLAUDE_CONFIG_DIR="${T_CLAUDE_CONFIG_DIR-}" CODEX_HOME="${T_CODEX_HOME-}" \
     PSYNC_ROUNDTRIP_TIMEOUT="${RT:-90}" PSYNC_DISK_WARN_GB=1 "$PSYNC" "$@"
 }
 
 serve() { # SCENARIO
   stop
-  python3 -I "$HERE/fake-syncthing.py" "$PORT" "$1" &
+  FAKE_LOG="$T/fake.log" python3 -I "$HERE/fake-syncthing.py" "$PORT" "$1" "$H" &
   SERVER=$!
   for _ in $(seq 50); do
     curl -fs "http://127.0.0.1:$PORT/rest/system/ping" >/dev/null 2>&1 && return
@@ -178,6 +179,84 @@ run add-host --id "$VALID_ID";            check "add-host needs a name" 1 "--nam
 run remove-host;                          check "remove-host needs an argument" 1 "usage: psync remove-host"
 run remove-host nobody --yes;             check "remove-host refuses an unknown host" 1 "no host named or identified 'nobody'"
 run remove-host pc;                       check "remove-host does not guess without a terminal" 1 "pass --yes"
+stop
+
+echo "folders (a host that syncs more than one)"
+mkdir -p "$H/.claude/projects"
+logged() { out=$(cat "$T/fake.log"); rc=0; }   # the writes the last command sent to the fake Syncthing
+serve multi;           run status; check "each line says which folder it is about" 0 "[projects] idle" "[claude] idle" "in sync" "!NOT in sync"
+serve multi-busy;      run status; check "a second folder with items to pull: not in sync" 1 "[projects] idle" "[claude] syncing" "NOT in sync"
+serve multi-paused;    run status; check "one paused folder is reported" 1 "[claude] PAUSED"
+serve multi-notshared; run status; check "a peer that has not added a folder is mentioned, not an error" 0 "[claude] pc connected, but has not added this folder" "!NOT in sync"
+serve quiet;           run status; check "one folder: the lines stay unlabelled" 0 "folder:    idle" "!["
+serve multi-busy;      run ready;  check "ready waits for every folder" 0 "catching up" "caught up"
+serve multi-paused;    run ready;  check "ready skips a paused folder" 0 "!psync:"
+serve multi;           run doctor; check "healthy host with two folders" 0 "result: all good" "!FAIL" "!warn"
+[[ $(grep -c '  ok    disk:' <<<"$out") == 1 ]] && ok "doctor: one disk line per filesystem" || no "doctor: one disk line per filesystem"
+serve multi-paused;    run doctor; check "doctor names the paused folder" 1 "FAIL  folder claude is paused"
+serve multi-notshared; run doctor; check "doctor warns about a peer that has not added a folder" 0 "  warn  a peer has not added a folder" "result: no failures, 1 warning(s)"
+serve multi;           run doctor --roundtrip
+check "a canary goes through every folder" 0 "roundtrip (projects): a canary file reached" "roundtrip (claude): a canary file reached"
+compgen -G "$H/.claude/projects/.psync-canary-*" >/dev/null && no "the canary is removed from the second folder too" || ok "the canary is removed from the second folder too"
+serve multi-notshared; run doctor --roundtrip
+check "no canary for a folder the peer has not added" 0 "roundtrip (projects): a canary file reached" "roundtrip (claude): no connected peer has added this folder yet" "result: no failures, 2 warning(s)"
+serve multi;           run folders; check "folders lists each folder and where it lives" 0 "FOLDER" "projects" "~/projects" "claude" "~/.claude/projects"
+serve multi;           run hosts;   check "hosts shows how much of its folders each host has" 0 "pc" "100%"
+
+echo "folder add / remove"
+serve quiet
+run folder;                                  check "folder needs an action" 1 "usage: psync folder"
+run folder add;                              check "folder add needs an ID and a PATH" 1 "usage: psync folder add"
+run folder add Bad_ID /x;                    check "folder add rejects a malformed ID" 1 "folder ID must be"
+run folder add x rel/path;                   check "folder add wants an absolute path" 1 "must be absolute"
+run folder add --preset nope;                check "folder add rejects an unknown preset" 1 "unknown preset"
+run folder add --preset claude x /y;         check "folder add takes a preset or ID PATH, not both" 1 "either --preset or ID PATH"
+run folder add inside "$H/projects/sub";     check "a folder inside another one is refused" 1 "already synced as part of folder projects"
+run folder add outer "$H";                   check "a folder that contains another one is refused" 1 "lives inside"
+T_CLAUDE_CONFIG_DIR="$H/projects/cc" run folder add --preset claude
+check "the preset follows CLAUDE_CONFIG_DIR, and is refused inside a synced folder" 1 "already synced as part of folder projects"
+run folder remove projects --yes;            check "the base folder cannot be removed" 1 "base folder"
+run folder remove nothere --yes;             check "folder remove refuses an unknown folder" 1 "no folder 'nothere'"
+serve multi
+run folder add claude /tmp/other;            check "folder add refuses an existing ID" 1 "already exists"
+run folder remove claude;                    check "folder remove does not guess without a terminal" 1 "pass --yes"
+
+serve quiet
+: >"$T/fake.log"
+run folder add --preset claude
+check "folder add --preset claude" 0 "added folder claude: ~/.claude/projects, shared with 1 other host(s)"
+[[ -d $H/.claude/projects ]] && ok "the folder directory exists" || no "the folder directory exists"
+logged
+check "the new folder is sent to Syncthing as sendreceive, shared with the known hosts" 0 \
+  'PUT config/folders/claude' '"id":"claude"' "\"path\":\"$H/.claude/projects\"" '"type":"sendreceive"' '"deviceID":"PEER"' '"deviceID":"ME"'
+check "its old versions go outside the folder, to a trashcan" 0 \
+  '"type":"trashcan"' "\"fsPath\":\"$H/.local/state/psync/versions/claude\"" '"cleanoutDays":"30"'
+: >"$T/fake.log"
+T_CODEX_HOME="$H/codex-home" run folder add --preset codex
+check "folder add --preset codex follows CODEX_HOME" 0 "added folder codex"
+logged
+check "codex syncs its sessions directory only" 0 "\"path\":\"$H/codex-home/sessions\""
+: >"$T/fake.log"
+serve multi
+run folder remove claude --yes;              check "folder remove" 0 "removed folder claude"
+logged
+check "folder remove deletes just that folder from Syncthing" 0 'DELETE config/folders/claude'
+
+echo "folders: pause, resume and hosts act on all of them"
+serve multi; : >"$T/fake.log"
+run pause;  check "pause" 0 "paused"
+logged;     check "pause pauses every folder" 0 'PATCH config/folders/projects {"paused":true}' 'PATCH config/folders/claude {"paused":true}'
+: >"$T/fake.log"
+run resume; check "resume" 0 "resumed"
+logged;     check "resume resumes every folder" 0 'PATCH config/folders/projects {"paused":false}' 'PATCH config/folders/claude {"paused":false}'
+: >"$T/fake.log"
+run add-host --id "$VALID_ID" --name friend; check "add-host" 0 "added host friend"
+logged;     check "add-host shares every folder with the new host" 0 \
+  "PUT config/folders/projects" "PUT config/folders/claude" "\"deviceID\":\"$VALID_ID\""
+: >"$T/fake.log"
+run remove-host pc --yes; check "remove-host" 0 "removed host pc"
+logged;     check "remove-host leaves every folder" 0 "PUT config/folders/projects" "PUT config/folders/claude" 'DELETE config/devices/PEER'
+run help;   check "help lists the folder commands" 0 "psync folders" "psync folder add" "psync folder remove"
 stop
 
 echo "install.sh (--plan only: nothing is installed)"

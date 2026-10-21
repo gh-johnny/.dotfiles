@@ -14,13 +14,17 @@ that syncs). Both are on the tailnet and both keep a full copy of `~/projects`.
 | changed anything psync-related | `bash ~/projects/dotfiles/psync/tests/run.sh` (and `tests/mesh.sh` if it touches pairing or hosts), then `psync doctor --roundtrip` on **every** host |
 | want to see who is in the mesh | `psync hosts` |
 | adding, replacing or removing a host | "Adding or replacing a host" below |
+| want Claude or Codex sessions (or any other directory) on the other host too | "Syncing more folders" below |
 | curious whether all is well | `psync doctor` (read-only, instant) |
 
 `psync doctor` prints `ok` / `warn` / `FAIL` per check and exits 1 only on FAIL. A warn is something
 that comes and goes (a peer asleep, edits still travelling) or a date to act on; a FAIL stays broken
-until someone fixes it. `--roundtrip` also writes a canary file under `~/projects` and waits (up to
-90s) until every peer reports having it, which covers scan, announce, transfer and the ignore rules
-in one go. It is removed afterwards.
+until someone fixes it. `--roundtrip` also writes a canary file in every synced folder and waits (up to
+90s per folder) until every connected peer that has the folder reports having it, which covers scan,
+announce, transfer and the ignore rules in one go. It is removed afterwards.
+
+Every command acts on all the folders the host syncs (`psync folders`). With more than one, the lines
+of `status` and `doctor` start with `[folder]`; with one they look as they always did.
 
 ## Something looks wrong
 
@@ -32,6 +36,7 @@ in one go. It is removed afterwards.
 | `git`: bad object, missing commit, or an old index right after switching hosts | refs can arrive before their objects, and `.git/index` after both; running git on the other host in that window (even `git status`) makes the old index win | stop touching git, `psync wait`, then `git read-tree HEAD` if the index is stale (index only, working tree untouched). Never lost commits |
 | `psync check` parked a git index conflict | two hosts ran `git status` in one repo at once | nothing; copies sit in `~/.local/state/psync/index-conflicts` for 7 days |
 | `folder error(s)` in status | Syncthing could not read or write something | `journalctl --user -u syncthing -n 50` |
+| `[claude] pc connected, but has not added this folder` | sharing a folder is opt-in on each host and that host has not run `psync folder add` for it. Not an error: nothing is waiting for it, doctor only warns | run the same `psync folder add` there, or `psync folder remove` here if you do not want it |
 | `psync ready` prints "last backup FAILED" or "no successful backup for over 36h" | the VPS timer failed or did not run | `psync backup status`; most often disk below 30GB free; `psync backup` to retry |
 | doctor: tailscale node key expires in N days | the node key has an expiry | Tailscale admin console, that machine, disable key expiry (or re-authenticate before the date) |
 | SSH to the VPS prints an approval URL | Tailscale SSH re-checks every 12 hours | open it in a browser, approve |
@@ -44,7 +49,9 @@ Sync copies deletions too, so there are two safety nets.
 **A file replaced or deleted in the last 30 days.** Syncthing keeps the old copy on the host that
 received the change: `~/projects/.stversions/<same path>~YYYYMMDD-HHMMSS.<ext>`. Look on both hosts
 (`find ~/projects/.stversions -name '*<name>*'`); the host where the delete or edit was made does
-not have it, the other one does. Copy it back out.
+not have it, the other one does. Copy it back out. Folders added with `psync folder add` keep one copy
+of each replaced or deleted file for 30 days outside the folder, in
+`~/.local/state/psync/versions/<folder>/<same path>`.
 
 **Anything older, or a whole folder.** restic snapshots on the VPS (daily 04:30 BRT; 7 daily,
 4 weekly, 6 monthly):
@@ -109,7 +116,38 @@ it).
    as their introducer drop it on their own. The files on the removed host stay there.
 
 Backups are per host: give every host that should keep its own history `psync backup setup` (and save
-each password separately). Two independent repositories do not depend on each other.
+each password separately). Two independent repositories do not depend on each other. They cover
+`~/projects` only, not the folders added below.
+
+## Syncing more folders
+
+`psync setup` creates the base folder, `projects`. Anything else is a folder of its own, added on
+every host that should have it:
+
+```bash
+psync folders                       # what this host syncs, its state, how many hosts share it
+psync folder add --preset claude    # Claude Code sessions and memory: $CLAUDE_CONFIG_DIR or ~/.claude, then projects/
+psync folder add --preset codex     # Codex sessions: $CODEX_HOME or ~/.codex, then sessions/
+psync folder add notes ~/notes      # any other directory: ID, then an absolute path
+psync folder remove claude          # stop syncing it on this host (the files stay)
+```
+
+- **Opt-in on each host.** A folder syncs between the hosts that have added it. `folder add` shares
+  it with every host this one knows, and `add-host` shares every folder with a new host, so the order
+  in which the hosts add it does not matter. A host that has not added it yet only holds an offer.
+- **Only the session directories**, never the config directory around them, so `.credentials.json`,
+  `auth.json` and the app databases cannot travel. If `CLAUDE_CONFIG_DIR` or `CODEX_HOME` already lives
+  inside a synced folder (it does for the PC and VPS: they sit inside `~/projects`), the preset says so
+  and refuses: those sessions already sync with `projects`.
+- **Same absolute path on every host**, as for `projects`: Claude Code names a session folder after the
+  working directory. Folders cannot nest, so psync refuses a path inside another folder or containing one.
+- **Old versions** go to a trashcan outside the folder (see "Recovering data"), not to a `.stversions`
+  inside it: a harness finds and resumes sessions by scanning its directory, and a transcript that grows
+  all day would be archived over and over.
+- **Transcripts hold whatever was typed or printed in the chat**, `.env` contents and tokens included.
+  They go to every host that adds the folder: only hosts you own.
+- Checked with real Syncthing by `tests/mesh.sh`. Not yet tried end to end with `claude --resume` and
+  `codex resume` on a host that is not the PC or the VPS: do that after the first sync of a new setup.
 
 ## Rebuild the VPS from nothing
 
@@ -164,7 +202,8 @@ receive everything; check `psync status` and the VPS's `git status` before trust
 | Syncthing identity and config | `~/.local/state/syncthing` on each host | no, per host |
 | logins (Claude, Codex, `gh`) | per host | never |
 | restic repository and password | VPS only, outside `~/projects` | no |
-| tests | `run.sh` (about 60 checks against a fake Syncthing, under a minute), `mesh.sh` (real Syncthing, 4 sandboxes, about 35s), `install-docker.sh` (clean Ubuntu in docker, needs network). None touch your own hosts | `psync/tests/` |
+| old versions of folders added with `folder add` | `~/.local/state/psync/versions/<folder>/` on each host | no, per host |
+| tests | `run.sh` (about 105 checks against a fake Syncthing, about 2 minutes), `mesh.sh` (real Syncthing, 4 sandboxes, about 4 minutes), `install-docker.sh` (clean Ubuntu in docker, needs network). None touch your own hosts | `psync/tests/` |
 | host installer | `psync/install.sh` (packages, link, linger; `--plan` changes nothing) | `psync/` |
 
 ## Limits worth remembering
@@ -177,5 +216,9 @@ receive everything; check `psync status` and the VPS's `git status` before trust
   still appending to its transcript (these can be hundreds of MB) leaves the other host a few KB
   behind at every moment. Seen on 2026-10-20 with a 197MB Codex rollout; `psync hosts` showed the peer
   at 98% while the folder itself was idle. Close or pause the session, then wait.
+- The same growing transcript is archived again and again by `projects`' staggered versioning, which
+  keeps a copy about every 30s for the first hour: that rollout left 17 copies (3.3GB) in the PC's
+  `.stversions` within one hour (2026-10-20). Folders added with `folder add` use a trashcan (one copy
+  per file) for this reason.
 - Dependencies (`node_modules`, `.venv`, `target`) are rebuilt per host: the VPS is ARM.
 - The backups sit on the same disk as the VPS copy of the data. The PC is the other full copy.

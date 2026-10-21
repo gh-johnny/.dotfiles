@@ -85,6 +85,7 @@ wait_for() { # SECONDS command...   (polls every 2s)
 }
 sees() { hx "$1" hosts | grep -Eq "$2"; }                  # HOST REGEX
 has_file() { [[ -f $T/$1/projects/$2 ]]; }                 # HOST FILE
+has_extra() { [[ -f $T/$1/extra/$2 ]]; }                   # HOST FILE, in the second folder
 
 ok() { pass=$((pass + 1)); printf '  ok    %s\n' "$1"; }
 no() { fail=$((fail + 1)); printf '  FAIL  %s\n' "$1"; [[ -z $out ]] || printf '          | %s\n' "${out//$'\n'/$'\n          | '}"; }
@@ -145,6 +146,38 @@ hx c remove-host a --yes >/dev/null 2>&1
 if sees b '^a '; then no "remove-host drops a on b"; else ok "remove-host drops a on b"; fi
 has_file b f1.txt && ok "the files stay on the host that removed a peer" || no "the files stay on the host that removed a peer"
 expect "removing a on its introducees also drops it on d (introduced)" 60 bash -c "$(declare -f sees hx); T=$T PSYNC=$PSYNC; ! sees d '^a '"
+
+echo "second folder: sharing is opt-in on each host"
+hx b folder add extra "$T/b/extra" >/dev/null 2>&1
+expect "b says c has not added the folder yet" 90 bash -c "$(declare -f hx); T=$T PSYNC=$PSYNC; hx b status | grep -q 'c connected, but has not added this folder'"
+hx c folder add extra "$T/c/extra" >/dev/null 2>&1
+echo e1 >"$T/b/extra/e1.txt"
+expect "a file in the second folder reaches c once c has added it" 120 has_extra c e1.txt
+[[ ! -e $T/d/extra ]] && ok "d never added the folder, so it has none of its files" || no "d never added the folder, so it has none of its files"
+out=$(hx b doctor --roundtrip 2>&1)
+if grep -q 'ok    roundtrip (extra): a canary file reached' <<<"$out"; then ok "doctor --roundtrip sends a canary through the second folder"; else no "doctor --roundtrip sends a canary through the second folder"; fi
+out=""
+rm -f "$T/b/extra/e1.txt"
+expect "a file deleted on b goes to c's trashcan outside the folder" 120 bash -c "[[ ! -e $T/c/extra/e1.txt && -e $T/c/.local/state/psync/versions/extra/e1.txt ]]"
+[[ ! -e $T/c/extra/.stversions ]] && ok "no versions directory inside the second folder" || no "no versions directory inside the second folder"
+
+echo "pause and resume cover every folder"
+hx b pause >/dev/null 2>&1
+out=$(hx b folders 2>&1)
+if [[ $(grep -c ' paused ' <<<"$out") == 2 ]]; then ok "pause pauses both folders"; else no "pause pauses both folders"; fi
+hx b resume >/dev/null 2>&1
+out=$(hx b folders 2>&1)
+if grep -q ' paused ' <<<"$out"; then no "resume resumes both folders"; else ok "resume resumes both folders"; fi
+out=""
+
+echo "add-host shares every folder"
+hx b remove-host d --yes >/dev/null 2>&1
+hx b add-host --id "$D" --name d >/dev/null 2>&1
+if api b GET config/folders/extra | jq -e --arg d "$D" '.devices | any(.deviceID == $d)' >/dev/null; then
+  ok "a host added later is in the second folder too"
+else
+  no "a host added later is in the second folder too"
+fi
 
 echo
 echo "passed $pass, failed $fail"
