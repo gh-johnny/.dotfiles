@@ -400,6 +400,10 @@ backup_run() {
   local free_gb rc=0
   backup_have_repo || die "no backup repository on this host (run: psync backup setup)"
   mkdir -p "$STATE_DIR"
+  # Two runs at once (the timer and a manual one) fight over the repository lock: `forget --prune` needs
+  # it alone and would report a backup failure that is not one. The second run waits its turn.
+  exec 9>"$STATE_DIR/backup.lock"
+  flock -n 9 || { echo "psync: another backup is running, waiting for it to finish" >&2; flock 9; }
   free_gb=$(($(df --output=avail -k "$BACKUP_REPO" | tail -1) / 1048576))
   if ((free_gb < BACKUP_MIN_FREE_GB)); then
     echo "fail $(date +%s) only ${free_gb}GB free, needs ${BACKUP_MIN_FREE_GB}GB" >"$STATE_DIR/backup-last"

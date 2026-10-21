@@ -161,6 +161,27 @@ echo "ok $(date +%s)" >"$H/.local/state/psync/backup-last"
 run doctor; check "a recent backup is fine" 0 "  ok    backup: last run ok at"
 rm -f "$H/.local/share/psync-backup/repo/config" "$H/.local/state/psync/backup-last"
 
+echo "backup: two runs at once"
+# A fake restic that logs when each verb starts and ends: overlapping runs would interleave the lines.
+mkdir -p "$H/.local/share/psync-backup/repo" "$H/.config/psync"
+: >"$H/.local/share/psync-backup/repo/config"
+echo "backup_min_free_gb=0" >"$H/.config/psync/config"
+printf '#!/bin/sh\necho "start $1" >>"$FAKE_RESTIC_LOG"\nsleep 1\necho "end $1" >>"$FAKE_RESTIC_LOG"\n' >"$T/bin/restic"
+chmod +x "$T/bin/restic"
+export FAKE_RESTIC_LOG=$T/restic.log
+: >"$FAKE_RESTIC_LOG"
+psync backup >/dev/null 2>&1 &
+first=$!
+sleep 0.5
+run backup
+wait "$first"
+want=$'start backup\nend backup\nstart forget\nend forget\nstart backup\nend backup\nstart forget\nend forget'
+check "the second run tells it is waiting" 0 "another backup is running, waiting"
+[[ $(<"$FAKE_RESTIC_LOG") == "$want" ]] && ok "the runs follow each other, never overlap" || { out=$(<"$FAKE_RESTIC_LOG"); no "the runs follow each other, never overlap"; }
+out=$(<"$H/.local/state/psync/backup-last"); [[ $out == ok\ * ]] && ok "and the last run is recorded as ok" || no "and the last run is recorded as ok"
+unset FAKE_RESTIC_LOG
+rm -f "$T/bin/restic" "$H/.config/psync/config" "$H/.local/share/psync-backup/repo/config" "$H/.local/state/psync/backup-last"
+
 echo "doctor --roundtrip"
 serve quiet; run doctor --roundtrip
 check "a canary file reaches the peer" 0 "roundtrip: a canary file reached every connected peer"
