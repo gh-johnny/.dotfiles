@@ -1,0 +1,2 @@
+# Not a stow package: nothing in here is linked into $HOME (see the README).
+.*
