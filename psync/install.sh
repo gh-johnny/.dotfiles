@@ -25,7 +25,8 @@ for arg in "$@"; do
 done
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-DOTFILES=$HOME/projects/dotfiles
+# The package is stowed from wherever this script lives: STOW_DIR holds a directory named psync.
+STOW_DIR=$(dirname "$HERE")
 OS_RELEASE=${PSYNC_OS_RELEASE:-/etc/os-release}
 SYNCTHING_KEY_URL=https://syncthing.net/release-key.gpg
 SYNCTHING_KEYRING=/etc/apt/keyrings/syncthing-archive-keyring.gpg
@@ -42,8 +43,8 @@ run() {
 }
 
 [[ $EUID -ne 0 ]] || die "run it as the sync user, not root (it uses sudo where it needs to)"
-[[ $(cd "$DOTFILES" 2>/dev/null && pwd -P) == "$(cd "$HERE/.." && pwd -P)" ]] ||
-  die "this script lives in $HERE; psync expects its package at ~/projects/dotfiles/psync (the shared ignore file is read from there)"
+[[ $(basename "$HERE") == psync ]] ||
+  die "this script lives in $HERE, but stow links a package by its directory name: keep the directory called psync"
 
 family=unknown
 if [[ -r $OS_RELEASE ]]; then
@@ -55,7 +56,7 @@ if [[ -r $OS_RELEASE ]]; then
   esac
 fi
 [[ $family != unknown ]] ||
-  die "unsupported distribution. Install by hand: syncthing (2 or newer), jq, curl, stow, git (restic and openssl for backups), then run: stow --no-folding --dir=$DOTFILES --target=\$HOME psync"
+  die "unsupported distribution. Install by hand: syncthing (2 or newer), jq, curl, stow, git (restic and openssl for backups), then run: stow --no-folding --dir=$STOW_DIR --target=\$HOME psync"
 if $PLAN; then say "$family system, plan only (nothing is changed)"; else say "$family system"; fi
 
 wanted=(jq curl stow git)
@@ -90,8 +91,8 @@ case $family in
     ;;
 esac
 say "linking the psync package into \$HOME"
-run mkdir -p "$HOME/projects" "$HOME/.local/bin" "$HOME/.config/systemd/user"
-run stow --no-folding --dir="$DOTFILES" --target="$HOME" psync
+run mkdir -p "$HOME/.local/bin" "$HOME/.config/systemd/user"
+run stow --no-folding --dir="$STOW_DIR" --target="$HOME" psync
 
 say "user services should keep running without a login session"
 if $PLAN; then
@@ -102,7 +103,9 @@ fi
 
 cat <<EOF
 
-install: done. Next, pair this host (the first host of a new mesh needs no peer; use --listen tcp://:22000
+install: done. If the folder to sync is not ~/projects, say so first (psync config lists the settings):
+  psync init --folder-path ~/code
+Next, pair this host (the first host of a new mesh needs no peer; use --listen tcp://:22000
 on a host the others will dial, tcp://127.0.0.1:22000 on one that only dials out):
   psync setup --listen tcp://:22000
   psync setup --peer-id <ID of a host already in> --peer-name <its name> --peer-address tcp://<its address>:22000 --listen tcp://127.0.0.1:22000

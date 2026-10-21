@@ -257,13 +257,67 @@ logged;     check "add-host shares every folder with the new host" 0 \
 run remove-host pc --yes; check "remove-host" 0 "removed host pc"
 logged;     check "remove-host leaves every folder" 0 "PUT config/folders/projects" "PUT config/folders/claude" 'DELETE config/devices/PEER'
 run help;   check "help lists the folder commands" 0 "psync folders" "psync folder add" "psync folder remove"
+run help;   check "help lists the settings commands" 0 "psync init" "psync config"
+stop
+
+echo "settings (~/.config/psync/config)"
+CFG=$H/.config/psync/config
+serve quiet
+run config;  check "without a file the defaults apply" 0 "settings file: none" "folder_path" "~/projects" "default" "!settings file: ~"
+run init;    check "init writes the file" 0 "wrote ~/.config/psync/config"
+grep -q '^# folder_path=~/projects$' "$CFG" && grep -q '^# versions_days=30$' "$CFG" && ! grep -q '^[a-z_]*=' "$CFG" &&
+  ok "init leaves every default commented out" || no "init leaves every default commented out"
+run init;    check "init does not overwrite" 1 "already exists"
+run init --force --folder-path "$H/code" --ignore-include none
+check "init --force takes the choices from its flags" 0 "wrote"
+grep -qx 'folder_path=~/code' "$CFG" && grep -qx 'ignore_include=none' "$CFG" && ok "the chosen values are written, with ~" || no "the chosen values are written, with ~"
+run config;  check "config shows the file and where each value comes from" 0 "settings file: ~/.config/psync/config" "~/code" "none" "file" "default"
+run init --force --folder-path code;       check "init rejects a relative path" 1 "folder_path must be an absolute path"
+run init --force --ignore-include /etc/x;  check "init rejects an ignore file outside the folder" 1 "ignore_include is a path inside the folder"
+run init --force --bogus;                  check "init rejects an unknown option" 1 "unknown option"
+rm -f "$CFG"
+
+bad() { # NAME CONTENT TEXT: a settings file that every command must refuse, naming the problem
+  printf '%s\n' "$2" >"$CFG"
+  run status
+  check "settings: $1" 1 "$3"
+}
+bad "an unknown setting names its line" $'# fine\ncolour=blue' "line 2: unknown setting 'colour'"
+bad "a line without =" "just words" "expected KEY=VALUE"
+bad "a number must be a number" "disk_warn_gb=lots" "disk_warn_gb must be a whole number"
+bad "versions_days cannot be 0" "versions_days=0" "versions_days must be a whole number of days"
+bad "folder_path must be absolute" "folder_path=code" "folder_path must be an absolute path"
+bad "the ignore file stays inside the folder" "ignore_include=../x" "ignore_include is a path inside the folder"
+bad "a value is data, never run" "folder_path=\$(touch $T/pwned)" "folder_path must be an absolute path"
+[[ ! -e $T/pwned ]] && ok "settings: a value with \$(...) was not executed" || no "settings: a value with \$(...) was not executed"
+printf 'colour=blue\n' >"$CFG"
+run help;  check "help works with a broken settings file" 0 "psync status"
+printf '  folder_path = ~/projects  \n\n# a comment\n' >"$CFG"
+run config; check "spaces around the key and value, comments and blank lines are fine" 0 "~/projects" "file"
+
+printf 'versions_days=7\n' >"$CFG"
+: >"$T/fake.log"
+run folder add --preset claude; check "versions_days reaches the folders it adds" 0 "added folder claude"
+logged;                         check "…as the trashcan's clean-out time" 0 '"cleanoutDays":"7"'
+printf 'ignore_include=none\n' >"$CFG"
+mv "$H/projects/.stignore" "$H/projects/.stignore.off"
+run doctor; check "ignore_include none: psync leaves .stignore alone" 0 "ignore rules: ~/projects/.stignore is yours" "!FAIL"
+mv "$H/projects/.stignore.off" "$H/projects/.stignore"
+printf 'folder_path=%s/code\nignore_include=none\n' "$H" >"$CFG"
+run doctor; check "doctor notices a folder_path that Syncthing does not use" 1 "FAIL  folder_path says ~/code but Syncthing syncs ~/projects as folder projects"
+run setup;  check "setup will not repoint a folder to a directory that is not a Syncthing folder" 1 "folder projects already syncs ~/projects and folder_path says ~/code" "no .stfolder" "psync pause"
+mkdir -p "$H/code" && : >"$H/code/.stfolder" && : >"$T/fake.log"
+run setup;  check "…but a directory that was moved there (it has .stfolder) is fine" 0 "This device: ME"
+logged;     check "…and the folder is repointed" 0 'PUT config/folders/projects' "\"path\":\"$H/code\""
+rm -f "$CFG"
+PSYNC_DISK_WARN_GB=3 run config; check "PSYNC_DISK_WARN_GB wins over the file and the default" 0 "disk_warn_gb" "env"
 stop
 
 echo "install.sh (--plan only: nothing is installed)"
 # A home whose ~/projects/dotfiles is this checkout, and a PATH with none of the tools psync needs
 mkdir -p "$T/ihome/projects" "$T/minbin"
 ln -s "$(cd "$HERE/../.." && pwd -P)" "$T/ihome/projects/dotfiles"
-for tool in dirname sed cat; do ln -sf "$(command -v $tool)" "$T/minbin/$tool"; done
+for tool in dirname basename sed cat; do ln -sf "$(command -v $tool)" "$T/minbin/$tool"; done
 printf 'ID=ubuntu\nID_LIKE=debian\n' >"$T/os-debian"
 printf 'ID=arch\n' >"$T/os-arch"
 printf 'ID=plan9\n' >"$T/os-other"
@@ -273,7 +327,7 @@ plan() { # OS-FILE [install.sh args...]
   local osf=$1
   shift
   out=$(env -i HOME="$T/ihome" USER=tester PATH="$T/minbin" PSYNC_OS_RELEASE="$osf" FAKE_ST_VERSION="${FAKE_ST_VERSION:-}" \
-    "$BASH" "$HERE/../install.sh" --plan "$@" 2>&1 </dev/null)
+    "$BASH" "${INSTALL_SH:-$HERE/../install.sh}" --plan "$@" 2>&1 </dev/null)
   rc=$?
 }
 mv "$T/minbin/syncthing" "$T/syncthing.shim"
@@ -291,6 +345,13 @@ check "debian with Syncthing 2 already there: no extra repository" 0 "apt-get in
 FAKE_ST_VERSION=1.29.5 plan "$T/os-debian"
 check "debian with Syncthing 1.x: still adds the 2.x repository" 0 "stable-v2" "syncthing"
 rm -f "$T/minbin/syncthing"
+mkdir -p "$T/elsewhere/psync" "$T/elsewhere/other-name"
+cp "$HERE/../install.sh" "$T/elsewhere/psync/install.sh"
+cp "$HERE/../install.sh" "$T/elsewhere/other-name/install.sh"
+INSTALL_SH="$T/elsewhere/psync/install.sh" plan "$T/os-debian"
+check "the package can live anywhere, not only in ~/projects/dotfiles" 0 "stow --no-folding --dir=$T/elsewhere --target=$T/ihome psync" "!projects/dotfiles"
+INSTALL_SH="$T/elsewhere/other-name/install.sh" plan "$T/os-debian"
+check "a directory not called psync is refused (stow links by directory name)" 1 "keep the directory called psync"
 
 echo "vps/install.sh"
 V=$T/vps-home

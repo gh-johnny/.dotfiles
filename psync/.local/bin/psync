@@ -17,41 +17,102 @@
 #   psync folders       every synced folder: state, how many hosts share it, where it lives
 #   psync folder add ID PATH | add --preset claude|codex   sync one more folder (opt-in: run it on every host that wants it)
 #   psync folder remove ID [--yes]   stop syncing a folder on this host (its files stay where they are)
+#   psync init [--folder-path PATH] [--ignore-include FILE|none] [--force]   write this host's settings file
+#   psync config        the settings in effect on this host and where each comes from
 #   psync setup --peer-id ID --peer-name NAME [--peer-address ADDR] [--listen ADDR] [--no-introducer]
 #
 # Thin wrapper over the local Syncthing REST API. Every host runs the same setup. The base folder
-# (projects) takes its ignore patterns from dotfiles/psync/.config/psync/stignore, which syncs too.
+# (projects) takes its ignore patterns from an include file that syncs too (setting ignore_include).
 # psync owns its Syncthing instance, so every folder in it is a psync folder and each command
-# acts on all of them.
+# acts on all of them. Settings that differ per host live in ~/.config/psync/config.
 
 set -euo pipefail
 
-# The base folder, created by `psync setup`. More folders come from `psync folder add`.
+# The base folder, created by `psync setup`. More folders come from `psync folder add`. Its id is
+# the same on every host (hosts only sync a folder whose id matches), so it is not a setting.
 FOLDER_ID=projects
-FOLDER_PATH="$HOME/projects"
-IGNORE_INCLUDE="dotfiles/psync/.config/psync/stignore"
 FOLDER_ID_RE='^[a-z0-9][a-z0-9._-]*$'
 ST_HOME="${STHOMEDIR:-$HOME/.local/state/syncthing}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/psync"
+
+# Settings, overridden by ~/.config/psync/config (load_config). The variable of a setting is its
+# name in capitals; what is derived from them is computed once the file is read.
+CONFIG_FILE="$HOME/.config/psync/config"
+CONFIG_KEYS=(folder_path ignore_include versions_days disk_warn_gb disconnect_warn_hours backup_min_free_gb backup_stale_hours)
+FOLDER_PATH="$HOME/projects"                              # the base folder (the same path on every host if you can)
+IGNORE_INCLUDE="dotfiles/psync/.config/psync/stignore"    # relative to it; none = psync leaves .stignore alone
+VERSIONS_DAYS=30                                          # how long replaced or deleted files stay recoverable
+DISK_WARN_GB=20                                           # doctor warns below this much free space
+DISCONNECT_WARN_HOURS=1                                   # check warns when a host has been gone this long
+BACKUP_MIN_FREE_GB=30                                     # no restic snapshot below this much free space
+BACKUP_STALE_HOURS=36                                     # ready and doctor warn when the last backup is older
+declare -A CONFIG_SRC=()
+
 # Folders added with `folder add` keep their old versions here, not inside the folder: a chat
 # harness lists and resumes sessions by scanning its folder, and must not meet archived copies.
 VERSIONS_DIR="$STATE_DIR/versions"
-VERSIONS_MAX_AGE=$((30 * 86400))
-DISCONNECT_WARN_AFTER=3600
-# Backups live outside ~/projects (or they would be synced back), password included.
+# Backups live outside the synced folders (or they would be synced back), password included.
 BACKUP_REPO="${XDG_DATA_HOME:-$HOME/.local/share}/psync-backup/repo"
 BACKUP_PASSWORD="$STATE_DIR/backup-password"
 BACKUP_EXCLUDES="$HOME/.config/psync/backup-excludes"
-BACKUP_MIN_FREE_GB=30
 BACKUP_KEEP=(--keep-daily 7 --keep-weekly 4 --keep-monthly 6)
-BACKUP_STALE_AFTER=$((36 * 3600))
-DISK_WARN_GB=${PSYNC_DISK_WARN_GB:-20}
 ROUNDTRIP_TIMEOUT=${PSYNC_ROUNDTRIP_TIMEOUT:-90}
 KEY_WARN_DAYS=120
 KEY_FAIL_DAYS=30
 DEVICE_ID_RE='^([A-Z0-9]{7}-){7}[A-Z0-9]{7}$'
 
 die() { echo "psync: $*" >&2; exit 1; }
+
+# set_setting KEY VALUE WHERE: check one setting and store it. WHERE names its origin in errors.
+set_setting() {
+  local key=$1 val=$2 where=$3
+  [[ " ${CONFIG_KEYS[*]} " == *" $key "* ]] || die "$where: unknown setting '$key' (known: ${CONFIG_KEYS[*]})"
+  val=${val/#\~/$HOME}
+  case $key in
+    folder_path)
+      val=${val%/}
+      [[ $val == /* ]] || die "$where: folder_path must be an absolute path (or start with ~/), got '$val'"
+      ;;
+    ignore_include)
+      [[ $val != none ]] || val=""
+      [[ $val != /* && $val != *..* ]] || die "$where: ignore_include is a path inside the folder, without .. (or none), got '$val'"
+      ;;
+    versions_days)
+      [[ $val =~ ^[0-9]+$ && $val -ge 1 ]] || die "$where: versions_days must be a whole number of days, 1 or more, got '$val'"
+      ;;
+    *) [[ $val =~ ^[0-9]+$ ]] || die "$where: $key must be a whole number, got '$val'" ;;
+  esac
+  printf -v "${key^^}" '%s' "$val"
+}
+
+# load_config: read CONFIG_FILE (KEY=VALUE per line, # starts a comment line; read as data, never
+# executed), then let PSYNC_DISK_WARN_GB win, then compute what depends on the settings.
+load_config() {
+  local key val line n=0
+  for key in "${CONFIG_KEYS[@]}"; do CONFIG_SRC[$key]=default; done
+  if [[ -r $CONFIG_FILE ]]; then
+    while IFS= read -r line || [[ -n $line ]]; do
+      n=$((n + 1))
+      line=${line#"${line%%[![:space:]]*}"}
+      [[ -n $line && $line != \#* ]] || continue
+      [[ $line == *=* ]] || die "$CONFIG_FILE line $n: expected KEY=VALUE, got '$line'"
+      key=${line%%=*}
+      key=${key//[[:space:]]/}
+      val=${line#*=}
+      val=${val#"${val%%[![:space:]]*}"}
+      val=${val%"${val##*[![:space:]]}"}
+      set_setting "$key" "$val" "$CONFIG_FILE line $n"
+      CONFIG_SRC[$key]=file
+    done <"$CONFIG_FILE"
+  fi
+  if [[ -n ${PSYNC_DISK_WARN_GB-} ]]; then
+    set_setting disk_warn_gb "$PSYNC_DISK_WARN_GB" "PSYNC_DISK_WARN_GB"
+    CONFIG_SRC[disk_warn_gb]=env
+  fi
+  VERSIONS_MAX_AGE=$((VERSIONS_DAYS * 86400))
+  DISCONNECT_WARN_AFTER=$((DISCONNECT_WARN_HOURS * 3600))
+  BACKUP_STALE_AFTER=$((BACKUP_STALE_HOURS * 3600))
+}
 
 config_value() {
   local cfg="$ST_HOME/config.xml"
@@ -495,10 +556,16 @@ cmd_doctor() {
   n=$(conflict_files | wc -l)
   if ((n == 0)); then d_ok "no sync conflicts"; else d_warn "$n sync conflict(s) (psync conflicts)"; fi
 
-  if [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "#include $IGNORE_INCLUDE" && -r $FOLDER_PATH/$IGNORE_INCLUDE ]]; then
-    d_ok "ignore rules: ~/projects/.stignore includes $IGNORE_INCLUDE"
+  local here=${FOLDER_PATH/#"$HOME"/\~}
+  if p=$(folder_path "$FOLDER_ID" 2>/dev/null) && [[ ${p%/} != "$FOLDER_PATH" ]]; then
+    d_fail "folder_path says $here but Syncthing syncs ${p/#"$HOME"/\~} as folder $FOLDER_ID (psync config; psync setup explains how to move it)"
+  fi
+  if [[ -z $IGNORE_INCLUDE ]]; then
+    d_ok "ignore rules: $here/.stignore is yours, psync leaves it alone (ignore_include is none)"
+  elif [[ $(cat "$FOLDER_PATH/.stignore" 2>/dev/null) == "#include $IGNORE_INCLUDE" && -r $FOLDER_PATH/$IGNORE_INCLUDE ]]; then
+    d_ok "ignore rules: $here/.stignore includes $IGNORE_INCLUDE"
   else
-    d_fail "ignore rules: ~/projects/.stignore does not include $IGNORE_INCLUDE (psync setup)"
+    d_fail "ignore rules: $here/.stignore does not include $IGNORE_INCLUDE (psync setup)"
   fi
 
   local units=(syncthing.service psync-check.timer)
@@ -833,6 +900,65 @@ set_paused() { # true|false
   for id in $(folder_ids); do api PATCH "config/folders/$id" "{\"paused\": $1}" >/dev/null; done
 }
 
+# --- This host's settings. The file is optional: without it the defaults above apply, which are
+# the layout of the PC and the VPS. Nothing in it needs to be the same on every host.
+
+cmd_config() {
+  local key var val
+  if [[ -e $CONFIG_FILE ]]; then
+    echo "settings file: ${CONFIG_FILE/#"$HOME"/\~}"
+  else
+    echo "settings file: none, the defaults apply (psync init writes ${CONFIG_FILE/#"$HOME"/\~})"
+  fi
+  for key in "${CONFIG_KEYS[@]}"; do
+    var=${key^^}
+    val=${!var}
+    val=${val/#"$HOME"/\~}
+    printf '  %-22s %-46s %s\n' "$key" "${val:-none}" "${CONFIG_SRC[$key]}"
+  done
+}
+
+# config_line KEY CHOSEN COMMENT: one documented setting; commented out unless it was chosen
+config_line() {
+  local var=${1^^} val
+  val=${!var}
+  [[ $1 != ignore_include || -n $val ]] || val=none
+  val=${val/#"$HOME"/\~}
+  printf '# %s\n' "$3"
+  if [[ $2 == chosen ]]; then printf '%s=%s\n\n' "$1" "$val"; else printf '# %s=%s\n\n' "$1" "$val"; fi
+}
+
+cmd_init() {
+  local path="" inc="" force=false folder_state=default ignore_state=default
+  while (($#)); do
+    case $1 in
+      --folder-path) path=${2-}; shift 2 ;;
+      --ignore-include) inc=${2-}; shift 2 ;;
+      --force) force=true; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [[ ! -e $CONFIG_FILE ]] || $force ||
+    die "${CONFIG_FILE/#"$HOME"/\~} already exists (psync config shows it; --force replaces it)"
+  if [[ -n $path ]]; then set_setting folder_path "$path" "--folder-path"; folder_state=chosen; fi
+  if [[ -n $inc ]]; then set_setting ignore_include "$inc" "--ignore-include"; ignore_state=chosen; fi
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+  {
+    echo "# psync settings for this host: KEY=VALUE, one per line, no quotes. A line starting with # is a"
+    echo "# comment. Written by \`psync init\`; \`psync config\` shows what is in effect. A commented line shows"
+    echo "# the default. Nothing here has to match the other hosts (the folder id, which must, is fixed)."
+    echo
+    config_line folder_path "$folder_state" "The base folder to sync. Its path may differ from host to host."
+    config_line ignore_include "$ignore_state" "Ignore rules for it: a file inside the folder that syncs along (relative path), or none to leave .stignore alone."
+    config_line versions_days default "Days a replaced or deleted file stays recoverable."
+    config_line disk_warn_gb default "psync doctor warns below this much free disk space (GB)."
+    config_line disconnect_warn_hours default "psync check warns when a host has been unreachable this long (hours)."
+    config_line backup_min_free_gb default "psync backup takes no snapshot below this much free space (GB)."
+    config_line backup_stale_hours default "psync ready and doctor warn when the last backup is older than this (hours)."
+  } >"$CONFIG_FILE"
+  echo "wrote ${CONFIG_FILE/#"$HOME"/\~}; check it with: psync config"
+}
+
 cmd_setup() {
   local peer_id="" peer_name="" peer_address=dynamic listen="tcp://:22000" intro=true
   while (($#)); do
@@ -847,12 +973,14 @@ cmd_setup() {
   done
 
   mkdir -p "$FOLDER_PATH"
-  [[ -r $FOLDER_PATH/$IGNORE_INCLUDE ]] ||
-    die "missing $FOLDER_PATH/$IGNORE_INCLUDE — copy it from another host before the first sync"
-  local stignore="#include $IGNORE_INCLUDE"
-  if [[ "$(cat "$FOLDER_PATH/.stignore" 2>/dev/null)" != "$stignore" ]]; then
-    [[ ! -e $FOLDER_PATH/.stignore ]] || cp "$FOLDER_PATH/.stignore" "$FOLDER_PATH/.stignore.bak"
-    echo "$stignore" >"$FOLDER_PATH/.stignore"
+  if [[ -n $IGNORE_INCLUDE ]]; then
+    [[ -r $FOLDER_PATH/$IGNORE_INCLUDE ]] ||
+      die "missing $FOLDER_PATH/$IGNORE_INCLUDE — copy it from another host before the first sync"
+    local stignore="#include $IGNORE_INCLUDE"
+    if [[ "$(cat "$FOLDER_PATH/.stignore" 2>/dev/null)" != "$stignore" ]]; then
+      [[ ! -e $FOLDER_PATH/.stignore ]] || cp "$FOLDER_PATH/.stignore" "$FOLDER_PATH/.stignore.bak"
+      echo "$stignore" >"$FOLDER_PATH/.stignore"
+    fi
   fi
 
   [[ -r $ST_HOME/config.xml ]] || syncthing generate --home="$ST_HOME" --no-port-probing >/dev/null
@@ -863,6 +991,17 @@ cmd_setup() {
     sleep 1
   done
   $up || die "Syncthing API did not come up (journalctl --user -u syncthing)"
+
+  # Pointing an existing folder at another path makes Syncthing read the new directory as the
+  # folder's content: if it is empty, everything looks deleted, and that travels to every host.
+  # A directory that was moved here carries its .stfolder marker; a new empty one does not.
+  local current
+  if current=$(api GET "config/folders/$FOLDER_ID" 2>/dev/null); then
+    current=$(jq -r .path <<<"$current")
+    current=${current/#\~/$HOME}
+    [[ ${current%/} == "$FOLDER_PATH" || -e $FOLDER_PATH/.stfolder ]] ||
+      die "folder $FOLDER_ID already syncs ${current/#"$HOME"/\~} and folder_path says ${FOLDER_PATH/#"$HOME"/\~}, which is not a Syncthing folder (no .stfolder). To move it without Syncthing seeing deletions: psync pause, mv the directory to the new path, then run psync setup again"
+  fi
 
   api PATCH config/options "$(jq -n --arg listen "$listen" '{
     listenAddresses: [$listen],
@@ -891,6 +1030,12 @@ cmd_setup() {
   echo "This device: $(my_id)"
 }
 
+# Help and init have to work with a settings file that does not exist yet or is broken.
+case ${1:-status} in
+  -h | --help | help | init) ;;
+  *) load_config ;;
+esac
+
 case ${1:-status} in
   status) cmd_status ;;
   wait) shift; cmd_wait "$@" ;;
@@ -910,6 +1055,8 @@ case ${1:-status} in
   remove-host) shift; cmd_remove_host "$@" ;;
   folders) cmd_folders ;;
   folder) shift; cmd_folder "$@" ;;
+  init) shift; cmd_init "$@" ;;
+  config) cmd_config ;;
   tidy) park_index_conflicts ;;
   setup) shift; cmd_setup "$@" ;;
   -h | --help | help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' ;;

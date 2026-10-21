@@ -104,6 +104,9 @@ for n in a b c d; do
   HOME="$T/$n" syncthing generate --home="$T/$n/.local/state/syncthing" --no-port-probing >/dev/null 2>&1
   sed -i "s#127.0.0.1:8384#127.0.0.1:${GUI[$n]}#" "$T/$n/.local/state/syncthing/config.xml"
 done
+# a is a different kind of host: its folder lives in ~/code and psync leaves the ignore file alone
+mkdir -p "$T/a/.config/psync"
+printf 'folder_path=~/code\nignore_include=none\n' >"$T/a/.config/psync/config"
 
 echo "pairing: b and c join through a"
 hx a setup --listen "$(listen a)" >/dev/null 2>&1
@@ -120,6 +123,7 @@ expect "b and c connect to a once a added them" 90 bash -c "$(declare -f sees hx
 echo "files cross the hub"
 echo from-b >"$T/b/projects/f1.txt"
 expect "a file written on b reaches c through a" 120 has_file c f1.txt
+expect "a keeps it in its own folder_path (~/code), not in ~/projects" 60 bash -c "[[ -f $T/a/code/f1.txt && ! -e $T/a/projects/f1.txt ]]"
 expect "b learned about c from a (introducer)" 60 bash -c "$(declare -f sees hx); T=$T PSYNC=$PSYNC; sees b '^c .*through a \\(introduced\\)'"
 
 echo "direct link, then the hub goes down"
@@ -160,6 +164,21 @@ out=""
 rm -f "$T/b/extra/e1.txt"
 expect "a file deleted on b goes to c's trashcan outside the folder" 120 bash -c "[[ ! -e $T/c/extra/e1.txt && -e $T/c/.local/state/psync/versions/extra/e1.txt ]]"
 [[ ! -e $T/c/extra/.stversions ]] && ok "no versions directory inside the second folder" || no "no versions directory inside the second folder"
+
+echo "moving the base folder of one host (d)"
+mkdir -p "$T/d/.config/psync" "$T/d/fresh/dotfiles/psync/.config/psync"
+cp "$STIGNORE" "$T/d/fresh/dotfiles/psync/.config/psync/stignore"
+printf 'folder_path=~/fresh\n' >"$T/d/.config/psync/config"
+out=$(hx d setup 2>&1)
+if [[ $out == *"not a Syncthing folder"* ]]; then ok "setup refuses to repoint to a new empty directory"; else no "setup refuses to repoint to a new empty directory"; fi
+out=""
+hx d pause >/dev/null 2>&1
+mv "$T/d/projects" "$T/d/moved"
+printf 'folder_path=~/moved\n' >"$T/d/.config/psync/config"
+hx d setup >/dev/null 2>&1
+echo from-b-after-the-move >"$T/b/projects/f3.txt"
+expect "d receives new files at the moved path" 120 bash -c "[[ -f $T/d/moved/f3.txt && -f $T/d/moved/f1.txt ]]"
+has_file c f1.txt && has_file b f1.txt && ok "the move did not delete anything on the other hosts" || no "the move did not delete anything on the other hosts"
 
 echo "pause and resume cover every folder"
 hx b pause >/dev/null 2>&1

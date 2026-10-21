@@ -95,11 +95,14 @@ down, a replacement receiving everything from the survivors, and removal. Every 
 user name and home path (worktree `gitdir:` links and Claude Code's per-path session folders depend on
 it).
 
-1. **Prepare the host** (Debian, Ubuntu or Arch, as the sync user). Copy the `psync` package over and run
-   `bash ~/projects/dotfiles/psync/install.sh` (`--plan` first if you want to see it; `--with-backup`
-   adds restic). It installs Syncthing 2 (the Debian/Ubuntu archives still carry 1.x, so it adds the
-   official `stable-v2` apt repository), `jq`, `curl`, `stow`, `git`, links the package and enables
-   linger. Tested for real on a clean Ubuntu with `bash psync/tests/install-docker.sh`.
+1. **Prepare the host** (Debian, Ubuntu or Arch, as the sync user). Copy the `psync` package over (any
+   directory, as long as it is still called `psync`) and run `bash <where>/psync/install.sh` (`--plan`
+   first if you want to see it; `--with-backup` adds restic). It installs Syncthing 2 (the Debian/Ubuntu
+   archives still carry 1.x, so it adds the official `stable-v2` apt repository), `jq`, `curl`, `stow`,
+   `git`, links the package and enables linger. Tested for real on a clean Ubuntu with
+   `bash psync/tests/install-docker.sh`.
+   If this host keeps the folder somewhere other than `~/projects`, say so now, before `setup`:
+   `psync init --folder-path ~/code` (see "Settings of this host").
 2. **Join through one host that is already in:** on the new host,
    `psync setup --peer-id <its ID> --peer-name <name> --peer-address tcp://<its address>:22000 --listen tcp://127.0.0.1:22000`
    (it prints the new host's own ID; use `--listen tcp://:22000` on a host the others should dial).
@@ -190,7 +193,42 @@ receive everything; check `psync status` and the VPS's `git status` before trust
   over the real one.
 - **Upgrading Syncthing** (pacman on the PC, apt on the VPS; its auto-upgrade is off): keep both
   on the same major version, then run the tests and `psync doctor --roundtrip`.
-- **Backup policy and thresholds** are the constants at the top of the script.
+- **Settings of this host** live in `~/.config/psync/config` (see the next section). The backup
+  retention (`BACKUP_KEEP`) and the Tailscale key thresholds are still constants at the top of the script.
+
+## Settings of this host
+
+Optional. Without a file the defaults apply, and they are the layout of the PC and the VPS, so those
+two need no file. Nothing in it has to match the other hosts.
+
+```bash
+psync config                                          # what is in effect, and where each value comes from
+psync init                                            # write the file with every default commented out
+psync init --folder-path ~/code --ignore-include none # choose while writing (--force replaces an existing file)
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `folder_path` | `~/projects` | the base folder (id `projects`, the same on every host). The path may differ per host |
+| `ignore_include` | `dotfiles/psync/.config/psync/stignore` | the ignore rules for it: a file inside the folder, relative, that syncs along. `none` leaves `.stignore` alone (you write your own) |
+| `versions_days` | 30 | days a replaced or deleted file stays recoverable |
+| `disk_warn_gb` | 20 | `psync doctor` warns below this much free space. `PSYNC_DISK_WARN_GB` overrides it |
+| `disconnect_warn_hours` | 1 | `psync check` warns when a host has been unreachable this long |
+| `backup_min_free_gb` | 30 | `psync backup` takes no snapshot below this |
+| `backup_stale_hours` | 36 | `psync ready` and `doctor` warn when the last backup is older |
+
+The file is `KEY=VALUE` per line, no quotes, `#` for comment lines. It is read as data, never executed,
+and a typo (unknown setting, a word where a number goes, a relative path) stops every command with the
+line number. `psync help` and `psync init` still work then.
+
+**Changing `folder_path` on a host that already syncs is a move, not a setting.** Pointing a Syncthing
+folder at another directory makes it read that directory as the folder's content; if it is empty,
+everything looks deleted, and the deletions travel to every host. So `psync setup` refuses to repoint
+a folder to a directory that is not a Syncthing folder yet (it has no `.stfolder` marker, which a `mv`
+carries along and a new empty directory lacks), and `psync doctor` fails while the setting and Syncthing
+disagree. To move it: `psync pause`, `mv` the directory, set `folder_path`, `psync setup` (without peer
+options it only repoints the folder), `psync resume`, then `psync status` and
+`psync doctor --roundtrip` before trusting it.
 
 ## Where things live
 
@@ -200,6 +238,7 @@ receive everything; check `psync status` and the VPS's `git status` before trust
 | shell hook | PC: `ai` function in the live `~/.zshrc` (not a stow link). VPS: login hook in `~/.zshrc` and the `ai` wrapper | PC: `zsh/.zshrc`. VPS: `psync/vps/` |
 | public-SSH guard (root) | VPS: `/usr/local/sbin/psync-ssh-guard`, `/etc/systemd/system/psync-ssh-guard.*`, firewall backup in `/root/psync-fw-backup` | `psync/vps/` |
 | Syncthing identity and config | `~/.local/state/syncthing` on each host | no, per host |
+| settings of the host | `~/.config/psync/config` (optional; the stowed files next to it are links, this one is a plain file) | no, per host |
 | logins (Claude, Codex, `gh`) | per host | never |
 | restic repository and password | VPS only, outside `~/projects` | no |
 | old versions of folders added with `folder add` | `~/.local/state/psync/versions/<folder>/` on each host | no, per host |
