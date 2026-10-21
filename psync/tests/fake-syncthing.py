@@ -6,6 +6,8 @@ usage: fake-syncthing.py PORT SCENARIO [HOME]
   stuck    always items to pull, and the peer never gets a canary file
   offline  idle, peer disconnected
   paused   folder paused
+  staggered     idle, but projects keeps its old versions with staggered versioning
+  firstsetup    idle, and the listen address is still Syncthing's default (setup was never run)
 Two folders (projects and claude) instead of one:
   multi              both idle, peer has everything
   multi-busy         claude has items to pull for its first 3 db/status calls, then idle
@@ -66,6 +68,7 @@ def folder_config(folder):
         "path": PATHS[folder],
         "paused": folder in PAUSED,
         "devices": [{"deviceID": "ME"}, {"deviceID": "PEER"}],
+        "versioning": {"type": "staggered" if scenario == "staggered" else "trashcan"},
     }
 
 
@@ -79,6 +82,10 @@ ROUTES = {
     "system/version": lambda q: (200, {"version": "v0.0.0-fake"}),
     "system/status": lambda q: (200, {"myID": "ME", "startTime": "2026-01-01T00:00:00Z"}),
     "config/folders": lambda q: (200, [folder_config(f) for f in FOLDERS]),
+    "config/options": lambda q: (
+        200,
+        {"listenAddresses": ["default"] if scenario == "firstsetup" else ["tcp://127.0.0.1:22000"]},
+    ),
     "config/defaults/folder": lambda q: (
         200,
         {"versioning": {"type": "", "params": {}, "cleanupIntervalS": 3600, "fsPath": "", "fsType": "basic"}},

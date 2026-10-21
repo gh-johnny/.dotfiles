@@ -6,41 +6,9 @@
 // host). Ignoring a directory's children (dir/*) plus a leading "!" exception keeps
 // such files; exceptions must come before the pattern they carve out of.
 
-// --- Dependencies, build outputs and caches: native per host/arch, rebuilt locally
-(?d)node_modules
-(?d).venv
-(?d)venv
-(?d)__pycache__
-(?d).mypy_cache
-(?d).pytest_cache
-(?d).ruff_cache
-(?d).tox
-(?d).cache
-(?d).gradle
-(?d).cxx
-(?d).terraform
-(?d).next
-(?d).turbo
-(?d)target
-(?d)android/build
-(?d)android/app/build
-(?d)ios/build
-(?d)ios/Pods
-
-// --- Git: lock files must never travel, or the other host thinks git is running
-.git/**.lock
-.git/gc.pid
-
-// --- SQLite companions: only meaningful to the process that has the DB open
-*.sqlite-wal
-*.sqlite-shm
-*.sqlite-journal
-*.sqlite3-wal
-*.sqlite3-shm
-*.sqlite3-journal
-*.db-wal
-*.db-shm
-*.db-journal
+// --- Dependencies, build outputs and caches, git lock files, SQLite companions: the generic
+// profile (profiles/generic) holds them, so a host without this layout can use the same rules.
+#include profiles/generic
 
 // --- Claude Code (CLAUDE_CONFIG_DIR = agents/<key>/claude): login and live
 // process state stay per host; sessions, memory, todos and file history sync.

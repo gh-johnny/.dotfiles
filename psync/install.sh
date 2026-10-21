@@ -103,8 +103,9 @@ fi
 
 cat <<EOF
 
-install: done. If the folder to sync is not ~/projects, say so first (psync config lists the settings):
-  psync init --folder-path ~/code
+install: done. Say where your folder is and which ignore rules it gets (generic: node_modules, caches,
+git lock files, SQLite companions; psync config lists every setting):
+  psync init --folder-path ~/code --ignore-profile generic
 Next, pair this host (the first host of a new mesh needs no peer; use --listen tcp://:22000
 on a host the others will dial, tcp://127.0.0.1:22000 on one that only dials out):
   psync setup --listen tcp://:22000

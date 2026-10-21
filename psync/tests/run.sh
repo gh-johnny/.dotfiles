@@ -313,6 +313,60 @@ rm -f "$CFG"
 PSYNC_DISK_WARN_GB=3 run config; check "PSYNC_DISK_WARN_GB wins over the file and the default" 0 "disk_warn_gb" "env"
 stop
 
+echo "ignore profiles"
+PROFILE_SRC=$HERE/../.config/psync/profiles/generic
+mkdir -p "$H/.config/psync/profiles" && cp "$PROFILE_SRC" "$H/.config/psync/profiles/generic"
+grep -q '^(?d)node_modules$' "$PROFILE_SRC" && grep -q '^\.git/\*\*\.lock$' "$PROFILE_SRC" && grep -q '^\*\.sqlite-wal$' "$PROFILE_SRC" &&
+  ok "the generic profile ignores dependencies, git locks and SQLite companions" || no "the generic profile ignores dependencies, git locks and SQLite companions"
+grep -qx '#include profiles/generic' "$HERE/../.config/psync/stignore" &&
+  ok "the shared stignore takes those rules from the profile (one source)" || no "the shared stignore takes those rules from the profile (one source)"
+serve quiet
+run init --ignore-profile generic;     check "init --ignore-profile" 0 "wrote"
+grep -qx 'ignore_profile=generic' "$CFG" && grep -qx 'ignore_include=none' "$CFG" &&
+  ok "…writes the profile and turns the include off with it" || no "…writes the profile and turns the include off with it"
+run init --force --ignore-profile nope;                          check "init rejects a profile that does not exist" 1 "no ignore profile 'nope'" "have: generic"
+run init --force --ignore-profile "Bad Name";                    check "init rejects a malformed profile name" 1 "profile name"
+run init --force --ignore-profile generic --ignore-include x/y;  check "a profile and an include are alternatives" 1 "alternatives"
+printf 'ignore_include=a/b\nignore_profile=generic\n' >"$CFG"
+run status;                            check "…also in the file" 1 "alternatives"
+printf 'ignore_profile=generic\n' >"$CFG"
+run config;                            check "a profile alone needs no ignore_include=none" 0 "ignore_profile" "generic"
+grep -qE '^  ignore_include +none ' <<<"$out" && ok "…the include is off by itself" || no "…the include is off by itself"
+
+cp "$H/projects/.stignore" "$T/stignore.mine"
+run setup;                             check "setup with a profile" 0 "This device: ME"
+[[ $(cat "$H/projects/.stignore.bak") == "$(cat "$T/stignore.mine")" ]] && ok "…keeps the .stignore that was there" || no "…keeps the .stignore that was there"
+{ head -n1 "$H/projects/.stignore" | grep -q '^// managed by psync (ignore_profile=generic)'; } && grep -q '^(?d)node_modules$' "$H/projects/.stignore" &&
+  ok "…and writes the profile into .stignore" || no "…and writes the profile into .stignore"
+rm -f "$H/projects/.stignore.bak"
+run setup;                             check "setup again" 0 "This device: ME"
+[[ ! -e $H/projects/.stignore.bak ]] && ok "…does not back up its own file" || no "…does not back up its own file"
+run doctor;                            check "doctor: the profile is in place" 0 "ignore rules: ~/projects/.stignore holds the 'generic' profile" "!FAIL"
+echo "// someone's edit" >>"$H/projects/.stignore"
+run doctor;                            check "doctor: an edited .stignore fails" 1 "FAIL  ignore rules: ~/projects/.stignore is not the 'generic' profile"
+mv "$H/.config/psync/profiles/generic" "$T/generic.away"
+run doctor;                            check "doctor: a missing profile fails" 1 "FAIL  ignore rules: no profile 'generic'"
+mv "$T/generic.away" "$H/.config/psync/profiles/generic"
+cp "$T/stignore.mine" "$H/projects/.stignore"
+rm -f "$CFG"
+stop
+
+echo "setup: safe to run again"
+serve quiet; : >"$T/fake.log"
+run setup;  check "setup on a host that is already set up" 0 "This device: ME"
+logged;     check "…leaves its listen address alone" 0 "PATCH config/options" "!listenAddresses"
+check "…and keeps old versions in a trashcan, not staggered" 0 '"type":"trashcan"' '"cleanoutDays":"30"' "!staggered"
+: >"$T/fake.log"
+run setup --listen tcp://127.0.0.1:23000; logged
+check "--listen changes the listen address" 0 '"listenAddresses":["tcp://127.0.0.1:23000"]'
+serve firstsetup; : >"$T/fake.log"
+run setup;  logged
+check "the first setup listens on port 22000" 0 '"listenAddresses":["tcp://:22000"]'
+serve staggered; run doctor
+check "doctor warns about a base folder that still archives with staggered versioning" 0 "  warn  folder projects keeps old versions with 'staggered'" "psync setup"
+serve quiet; run doctor; check "…and not about a trashcan" 0 "!keeps old versions"
+stop
+
 echo "install.sh (--plan only: nothing is installed)"
 # A home whose ~/projects/dotfiles is this checkout, and a PATH with none of the tools psync needs
 mkdir -p "$T/ihome/projects" "$T/minbin"

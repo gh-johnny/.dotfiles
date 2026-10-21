@@ -13,7 +13,8 @@ set -u
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PSYNC=${PSYNC:-$HERE/../.local/bin/psync}
-STIGNORE=$HERE/../.config/psync/stignore
+PKGCONF=$HERE/../.config/psync          # stignore and profiles/, copied whole: the stignore includes a profile
+STIGNORE=$PKGCONF/stignore
 BASE=${MESH_PORT_BASE:-18400}
 
 for tool in syncthing jq curl; do
@@ -100,13 +101,17 @@ echo "sandboxes in $T"
 
 for n in a b c d; do
   mkdir -p "$T/$n/projects/dotfiles/psync/.config/psync" "$T/$n/.local/state/syncthing"
-  cp "$STIGNORE" "$T/$n/projects/dotfiles/psync/.config/psync/stignore"
+  cp -r "$PKGCONF/." "$T/$n/projects/dotfiles/psync/.config/psync/"
   HOME="$T/$n" syncthing generate --home="$T/$n/.local/state/syncthing" --no-port-probing >/dev/null 2>&1
   sed -i "s#127.0.0.1:8384#127.0.0.1:${GUI[$n]}#" "$T/$n/.local/state/syncthing/config.xml"
 done
 # a is a different kind of host: its folder lives in ~/code and psync leaves the ignore file alone
 mkdir -p "$T/a/.config/psync"
 printf 'folder_path=~/code\nignore_include=none\n' >"$T/a/.config/psync/config"
+# c takes its ignore rules from the generic profile, written into .stignore by psync itself
+mkdir -p "$T/c/.config/psync/profiles"
+cp "$PKGCONF/profiles/generic" "$T/c/.config/psync/profiles/generic"
+printf 'ignore_profile=generic\n' >"$T/c/.config/psync/config"
 
 echo "pairing: b and c join through a"
 hx a setup --listen "$(listen a)" >/dev/null 2>&1
@@ -124,6 +129,25 @@ echo "files cross the hub"
 echo from-b >"$T/b/projects/f1.txt"
 expect "a file written on b reaches c through a" 120 has_file c f1.txt
 expect "a keeps it in its own folder_path (~/code), not in ~/projects" 60 bash -c "[[ -f $T/a/code/f1.txt && ! -e $T/a/projects/f1.txt ]]"
+
+echo "ignore rules: the include that includes a profile (b), the profile itself (c), none (a)"
+mkdir -p "$T/b/projects/app/node_modules" "$T/c/projects/app2/node_modules"
+echo dep >"$T/b/projects/app/node_modules/dep.js"
+echo code >"$T/b/projects/app/main.js"
+echo dep >"$T/c/projects/app2/node_modules/dep2.js"
+echo code >"$T/c/projects/app2/main2.js"
+expect "code written on b reaches c and a" 120 bash -c "[[ -f $T/c/projects/app/main.js && -f $T/a/code/app/main.js ]]"
+expect "code written on c reaches b" 120 bash -c "[[ -f $T/b/projects/app2/main2.js ]]"
+sleep 15
+[[ ! -e $T/c/projects/app/node_modules && ! -e $T/a/code/app/node_modules ]] &&
+  ok "b's node_modules stayed home: the stignore's nested #include of the profile works" || no "b's node_modules stayed home: the stignore's nested #include of the profile works"
+[[ ! -e $T/b/projects/app2/node_modules && ! -e $T/a/code/app2/node_modules ]] &&
+  ok "c's node_modules stayed home: the profile written into its .stignore works" || no "c's node_modules stayed home: the profile written into its .stignore works"
+[[ $(head -n1 "$T/c/projects/.stignore") == "// managed by psync (ignore_profile=generic)"* ]] &&
+  ok "c's .stignore is the profile, written by setup" || no "c's .stignore is the profile, written by setup"
+out=$(hx c doctor 2>&1)
+if grep -q "holds the 'generic' profile" <<<"$out"; then ok "doctor on c confirms the profile is in place"; else no "doctor on c confirms the profile is in place"; fi
+out=""
 expect "b learned about c from a (introducer)" 60 bash -c "$(declare -f sees hx); T=$T PSYNC=$PSYNC; sees b '^c .*through a \\(introduced\\)'"
 
 echo "direct link, then the hub goes down"
@@ -167,7 +191,7 @@ expect "a file deleted on b goes to c's trashcan outside the folder" 120 bash -c
 
 echo "moving the base folder of one host (d)"
 mkdir -p "$T/d/.config/psync" "$T/d/fresh/dotfiles/psync/.config/psync"
-cp "$STIGNORE" "$T/d/fresh/dotfiles/psync/.config/psync/stignore"
+cp -r "$PKGCONF/." "$T/d/fresh/dotfiles/psync/.config/psync/"
 printf 'folder_path=~/fresh\n' >"$T/d/.config/psync/config"
 out=$(hx d setup 2>&1)
 if [[ $out == *"not a Syncthing folder"* ]]; then ok "setup refuses to repoint to a new empty directory"; else no "setup refuses to repoint to a new empty directory"; fi
@@ -188,6 +212,15 @@ hx b resume >/dev/null 2>&1
 out=$(hx b folders 2>&1)
 if grep -q ' paused ' <<<"$out"; then no "resume resumes both folders"; else ok "resume resumes both folders"; fi
 out=""
+
+echo "setup can be run again; the base folder keeps one old version"
+before=$(api b GET config/options | jq -c .listenAddresses)
+hx b setup >/dev/null 2>&1
+after=$(api b GET config/options | jq -c .listenAddresses)
+if [[ $before == "$after" && $after == *127.0.0.1* ]]; then ok "running setup again keeps the listen address"; else no "running setup again keeps the listen address ($before -> $after)"; fi
+if [[ $(api b GET config/folders/projects | jq -r .versioning.type) == trashcan ]]; then ok "the base folder keeps old versions in a trashcan"; else no "the base folder keeps old versions in a trashcan"; fi
+rm -f "$T/b/projects/f2.txt"
+expect "a file deleted on b goes to c's trashcan inside the base folder" 120 bash -c "[[ ! -e $T/c/projects/f2.txt && -e $T/c/projects/.stversions/f2.txt ]]"
 
 echo "add-host shares every folder"
 hx b remove-host d --yes >/dev/null 2>&1

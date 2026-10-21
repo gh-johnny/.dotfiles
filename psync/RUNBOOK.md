@@ -46,11 +46,12 @@ of `status` and `doctor` start with `[folder]`; with one they look as they alway
 
 Sync copies deletions too, so there are two safety nets.
 
-**A file replaced or deleted in the last 30 days.** Syncthing keeps the old copy on the host that
-received the change: `~/projects/.stversions/<same path>~YYYYMMDD-HHMMSS.<ext>`. Look on both hosts
-(`find ~/projects/.stversions -name '*<name>*'`); the host where the delete or edit was made does
-not have it, the other one does. Copy it back out. Folders added with `psync folder add` keep one copy
-of each replaced or deleted file for 30 days outside the folder, in
+**A file replaced or deleted in the last 30 days (`versions_days`).** Syncthing keeps the last version on
+the host that received the change, in a trashcan: `~/projects/.stversions/<same path>`. One copy per file:
+a second replacement overwrites it. Look on both hosts (`find ~/projects/.stversions -name '*<name>*'`);
+the host where the delete or edit was made does not have it, the other one does. Copy it back out.
+Entries from before 2026-10-20 (staggered versioning) carry a `~YYYYMMDD-HHMMSS` suffix and age out on
+their own. Folders added with `psync folder add` keep theirs outside the folder, in
 `~/.local/state/psync/versions/<folder>/<same path>`.
 
 **Anything older, or a whole folder.** restic snapshots on the VPS (daily 04:30 BRT; 7 daily,
@@ -101,8 +102,9 @@ it).
    archives still carry 1.x, so it adds the official `stable-v2` apt repository), `jq`, `curl`, `stow`,
    `git`, links the package and enables linger. Tested for real on a clean Ubuntu with
    `bash psync/tests/install-docker.sh`.
-   If this host keeps the folder somewhere other than `~/projects`, say so now, before `setup`:
-   `psync init --folder-path ~/code` (see "Settings of this host").
+   Say where this host keeps the folder and which ignore rules it gets, before `setup` (see
+   "Settings of this host"): `psync init --folder-path ~/code --ignore-profile generic`. A host laid out
+   like the PC and the VPS needs none of this.
 2. **Join through one host that is already in:** on the new host,
    `psync setup --peer-id <its ID> --peer-name <name> --peer-address tcp://<its address>:22000 --listen tcp://127.0.0.1:22000`
    (it prints the new host's own ID; use `--listen tcp://:22000` on a host the others should dial).
@@ -183,7 +185,11 @@ receive everything; check `psync status` and the VPS's `git status` before trust
 
 ## Changing things
 
-- **The ignore file** (`psync/.config/psync/stignore`) is synced, so one edit applies on both hosts.
+- **The ignore rules** come in two parts. The generic ones (dependencies and caches, git lock files, SQLite
+  companions) are the profile `psync/.config/psync/profiles/generic`; the PC's and the VPS's own layout
+  (Claude and Codex state under `agents/<key>/`, fixtures, runtime databases) is `psync/.config/psync/stignore`,
+  which `#include`s the profile. Both are inside `~/projects`, so they are synced and one edit applies on
+  both hosts. A host without that layout sets `ignore_profile=generic` instead (see "Settings of this host").
   Rule: whatever git *tracks* must sync, or it shows as deleted on the other host; carve tracked
   files out with a `!` exception placed before the pattern that hides them. Afterwards check
   `git status` for unexpected deletions on the other host. If an edit seems not to apply,
@@ -193,6 +199,10 @@ receive everything; check `psync status` and the VPS's `git status` before trust
   over the real one.
 - **Upgrading Syncthing** (pacman on the PC, apt on the VPS; its auto-upgrade is off): keep both
   on the same major version, then run the tests and `psync doctor --roundtrip`.
+- **Running `psync setup` again** is safe: it refreshes the folder's configuration (this is how a change
+  such as the versioning kind reaches a host that is already set up), and keeps the peers and the listen
+  address (`--listen` changes the latter). Syncthing restarts the folder when its configuration changed,
+  and rescans it: about 6 min on 500k files.
 - **Settings of this host** live in `~/.config/psync/config` (see the next section). The backup
   retention (`BACKUP_KEEP`) and the Tailscale key thresholds are still constants at the top of the script.
 
@@ -204,13 +214,15 @@ two need no file. Nothing in it has to match the other hosts.
 ```bash
 psync config                                          # what is in effect, and where each value comes from
 psync init                                            # write the file with every default commented out
-psync init --folder-path ~/code --ignore-include none # choose while writing (--force replaces an existing file)
+psync init --folder-path ~/code --ignore-profile generic  # what a host that is not laid out like the PC wants
+psync init --folder-path ~/code --ignore-include none     # or write .stignore yourself (--force replaces an existing file)
 ```
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `folder_path` | `~/projects` | the base folder (id `projects`, the same on every host). The path may differ per host |
 | `ignore_include` | `dotfiles/psync/.config/psync/stignore` | the ignore rules for it: a file inside the folder, relative, that syncs along. `none` leaves `.stignore` alone (you write your own) |
+| `ignore_profile` | none | instead of the include: a named rule set from `~/.config/psync/profiles/` (`generic`) that `psync setup` writes into `<folder>/.stignore`. Setting it turns the include off; setting both is an error. `psync doctor` fails if `.stignore` stops matching the profile (`psync setup` rewrites it; an `.stignore` someone else wrote is kept as `.stignore.bak`) |
 | `versions_days` | 30 | days a replaced or deleted file stays recoverable |
 | `disk_warn_gb` | 20 | `psync doctor` warns below this much free space. `PSYNC_DISK_WARN_GB` overrides it |
 | `disconnect_warn_hours` | 1 | `psync check` warns when a host has been unreachable this long |
@@ -242,7 +254,7 @@ options it only repoints the folder), `psync resume`, then `psync status` and
 | logins (Claude, Codex, `gh`) | per host | never |
 | restic repository and password | VPS only, outside `~/projects` | no |
 | old versions of folders added with `folder add` | `~/.local/state/psync/versions/<folder>/` on each host | no, per host |
-| tests | `run.sh` (about 105 checks against a fake Syncthing, about 2 minutes), `mesh.sh` (real Syncthing, 4 sandboxes, about 4 minutes), `install-docker.sh` (clean Ubuntu in docker, needs network). None touch your own hosts | `psync/tests/` |
+| tests | `run.sh` (about 160 checks against a fake Syncthing, about 3 minutes), `mesh.sh` (real Syncthing, 4 sandboxes, about 5 minutes), `install-docker.sh` (clean Ubuntu in docker, needs network). None touch your own hosts | `psync/tests/` |
 | host installer | `psync/install.sh` (packages, link, linger; `--plan` changes nothing) | `psync/` |
 
 ## Limits worth remembering
@@ -255,9 +267,10 @@ options it only repoints the folder), `psync resume`, then `psync status` and
   still appending to its transcript (these can be hundreds of MB) leaves the other host a few KB
   behind at every moment. Seen on 2026-10-20 with a 197MB Codex rollout; `psync hosts` showed the peer
   at 98% while the folder itself was idle. Close or pause the session, then wait.
-- The same growing transcript is archived again and again by `projects`' staggered versioning, which
-  keeps a copy about every 30s for the first hour: that rollout left 17 copies (3.3GB) in the PC's
-  `.stversions` within one hour (2026-10-20). Folders added with `folder add` use a trashcan (one copy
-  per file) for this reason.
+- Old versions are a trashcan (one copy per file), not staggered, on purpose: staggered keeps a copy
+  about every 30s for the first hour, so a transcript that grows all day left 17 copies of one 197MB
+  rollout (3.3GB) in the PC's `.stversions` within an hour on 2026-10-20. The price: no history of
+  several versions of a file. git has the code's, and the restic snapshots (VPS) have the rest.
+  `psync doctor` warns on a host whose `projects` still uses another kind.
 - Dependencies (`node_modules`, `.venv`, `target`) are rebuilt per host: the VPS is ARM.
 - The backups sit on the same disk as the VPS copy of the data. The PC is the other full copy.
