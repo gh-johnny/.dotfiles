@@ -44,7 +44,7 @@ done
 DOTFILES="$HOME/projects/dotfiles"
 DOTFILES_PACKAGES=(
     alacritty autostart btop fastfetch git ghostty hypr
-    kitty lazygit nvim psync ssh starship tmux walker waybar zsh
+    kitty lazygit nvim ssh starship tmux walker waybar zsh
 )
 
 # =============================================================================
@@ -82,7 +82,7 @@ fi
 
 info "Stowing packages..."
 stow --dir="$DOTFILES" --target="$HOME" "${DOTFILES_PACKAGES[@]}"
-info "To sync ~/projects with other hosts, pair them with psync (README: Sync between hosts)"
+info "To sync ~/projects with other hosts, install bifrost from ~/projects/bifrost (its README)"
 
 # =============================================================================
 section "3 — Shell"

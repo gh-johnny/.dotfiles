@@ -33,13 +33,14 @@ dotfiles/
 ├── kitty/        → ~/.config/kitty/
 ├── lazygit/      → ~/.config/lazygit/
 ├── nvim/         → ~/.config/nvim/
-├── psync/        → ~/.local/bin/psync, ~/.config/psync/, systemd user timer
 ├── ssh/          → ~/.ssh/config
 ├── starship/     → ~/.config/starship.toml
 ├── tmux/         → ~/.tmux.conf
 ├── walker/       → ~/.config/walker/
 ├── waybar/       → ~/.config/waybar/
 ├── zsh/          → ~/.zshrc, ~/.p10k.zsh
+├── bifrost/      (my ignore rules for bifrost sync — not stowed)
+├── vps/          (the VPS's ~/.zshrc and `ai` wrapper — not stowed, see below)
 └── archive/      (old X11/i3 configs — not stowed)
 ```
 
@@ -116,132 +117,24 @@ ls -la ~/.config/<pkg>
 ssh-add ~/.ssh/gh   # enter passphrase once; keychain handles the rest
 ```
 
-## Sync between hosts (psync)
+## Sync between hosts (bifrost)
 
-`~/projects` is mirrored continuously between the PC and the VPS with
-[Syncthing](https://syncthing.net), both hosts always on as peers. Everything
-travels, including untracked files, `.env`, `.git`, worktrees and harness chat
-history (Claude Code and Codex sessions live inside `ai-agents/agents/*`).
-Both hosts use the same absolute paths (`/home/jo/...`), so worktree `gitdir:`
-links and Claude Code's per-path session folders work unchanged.
+`~/projects` is mirrored continuously between my hosts with
+bifrost (Syncthing over Tailscale, my own tool, in its own repo): untracked files,
+`.env`, `.git`, worktrees and the Claude Code / Codex sessions travel too. The tool, its install,
+its tests and the runbook live in `~/projects/bifrost`; this repo only keeps my personal pieces:
 
-```bash
-psync status      # peers, pending changes, conflicts (exit 1 if not in sync)
-psync wait        # block until every peer has everything — run before shutting the PC down
-psync ready       # the other direction: wait briefly until THIS host has caught up (never fails)
-psync conflicts   # list *.sync-conflict-* files
-psync pause       # stop syncing on this host (stays paused across reboots)
-psync resume      # start again, picks up where it stopped
-psync doctor      # health check of this host (--roundtrip also sends a canary file to the peers)
-psync hosts       # every host in the mesh: state, how much it has, how this host reaches it
-psync add-host --id ID --name NAME [--address ADDR]   # pair another host (run on a host already in)
-psync remove-host NAME                                # stop syncing with a host (its files stay on it)
-```
+| Here | What it is |
+|---|---|
+| `bifrost/stignore` | my ignore rules for `~/projects` (includes bifrost's `generic` profile). Each host's bifrost settings point at it with `ignore_include=dotfiles/bifrost/stignore`. It syncs, so an edit reaches every host |
+| `vps/` | the VPS's minimal `~/.zshrc` (runs `bifrost ready` at SSH login) and its `ai` wrapper. `bash vps/install.sh` on the VPS installs them (a copy: a symlink breaks the launcher's repo-root detection) |
+| `zsh/.zshrc` | the `ai()` function runs `bifrost ready` before launching an agent |
+| `git/.config/git/config` | `core.checkStat=minimal`, `core.trustctime=false`, `gc.worktreePruneExpire=never`, so an index synced from another host stays valid and no host prunes another host's worktrees |
 
-Run `psync doctor --roundtrip` on every host after changing anything psync-related, and
-`bash psync/tests/run.sh` (about 60 checks against a fake Syncthing, no side effects). The mesh
-claims below are backed by `bash psync/tests/mesh.sh` (real Syncthing in four sandboxes). What to
-do when something looks wrong, how to recover data, and how to add, replace or rebuild a host:
-[`psync/RUNBOOK.md`](psync/RUNBOOK.md).
+Rule when editing `bifrost/stignore`: whatever git *tracks* must sync, or it shows up as deleted
+on the other host. Carve tracked files out with a `!` exception placed before the pattern that would
+hide them. Changing the rules makes Syncthing rescan the whole folder (minutes).
 
-On the PC a user timer (`psync-check.timer`) raises a desktop notification for
-new conflicts, folder errors or a peer disconnected for over an hour.
-
-**What stays per host** (`psync/.config/psync/stignore`, synced, applies everywhere):
-dependencies and build caches (`node_modules`, `.venv`, `target`, `.terraform`, …,
-rebuilt natively — the VPS is ARM), git lock files, SQLite `-wal/-shm` files, logins
-(`.credentials.json`, Codex `auth.json`) and live runtime state of the harnesses,
-including Codex's `*.sqlite`, claude-mem databases and gitignored `.runtime/` dirs.
-Rule when editing the ignore file: whatever git *tracks* must sync, or it shows up as
-deleted on the other host — carve tracked files out with a `!` exception placed
-before the pattern that would hide them.
-
-**Working on both hosts at once:** safe as long as each repo checkout is written by
-one host at a time — give the VPS agent its own worktree and branch. Two hosts
-writing the same file produce a `*.sync-conflict-*` copy (nothing is lost; the
-newer edit wins). Files replaced or deleted by the other host are kept for 30 days
-in `~/projects/.stversions`.
-
-**Switching hosts inside one repo:** `psync wait` on the host you are leaving; the host
-you arrive on runs `psync ready` by itself (the `ai` function in `zsh/.zshrc`, and an SSH
-login hook in the VPS `~/.zshrc`). `ready` is instant when nothing is pending, waits up to
-a minute while the other host's changes are still arriving, and warns when that host is
-offline. It cannot see edits the other host made in the last ~10s or while it is
-offline/asleep, so `psync wait` before leaving stays the one manual step. A commit's refs can arrive
-a few seconds before its objects and `.git/index` after both, and running git on the
-other host in that window (even `git status`, which rewrites the index) makes an older
-index win the sync. The result is only a stale index, never lost commits: fix it with
-`git read-tree HEAD` (index only, working tree untouched) once `psync status` says in
-sync. `psync check` parks the losing `index.sync-conflict-*` copies automatically.
-After every Syncthing (re)start `psync check` requests one extra full rescan, because
-edits made during the startup scan are not seen by the filesystem watcher.
-
-The git package sets `core.checkStat=minimal`, `core.trustctime=false` and
-`gc.worktreePruneExpire=never` so synced indexes stay valid and no host prunes
-another host's worktrees.
-
-### Backups (restic, VPS)
-
-Sync is not a backup: a deletion or a bad overwrite travels to the other host. Beyond the
-30-day `.stversions`, the VPS keeps restic snapshots of `~/projects` (deduplicated and
-compressed, about the size of the project data plus its churn) every day at 04:30 BRT.
-Kept: 7 daily, 4 weekly and 6 monthly. A run refuses to start with less than 30 GB free.
-
-```bash
-psync backup status                     # snapshots, repository size, free disk, last result
-psync backup                            # snapshot now (the timer runs the same)
-psync backup restic ls latest <path>    # any restic command against the repository
-psync backup restic restore latest --target /tmp/restore --include /home/jo/projects/<dir>
-```
-
-The repository (`~/.local/share/psync-backup/repo`) and its password
-(`~/.local/state/psync/backup-password`) stay outside `~/projects`, so they never sync.
-Copy the password somewhere safe: without it the snapshots cannot be opened. What is
-excluded is in `psync/.config/psync/backup-excludes` (caches, dependencies, logins). A failed
-or overdue backup shows up as a line in `psync ready`, i.e. at every SSH login to the VPS.
-To make another host take backups too: install restic and run `psync backup setup` there.
-
-### VPS: public SSH is closed
-
-The VPS holds a copy of every project, `.env` files included, so its only way in is the
-tailnet: the public `tcp/22` rule is gone from `/etc/iptables/rules.v4` and from the live
-firewall. Use `ssh jo@100.90.235.90` (Tailscale SSH, re-approved in the browser every 12h).
-`psync-ssh-guard.timer` (root, every minute, script `/usr/local/sbin/psync-ssh-guard`) is the
-way back in: if Tailscale is not `Running` for 5 minutes (stopped, node key expired) it reopens
-`tcp/22`, and it closes it again once Tailscale is back. The Tailscale node key of the VPS
-expires on 2027-04-04: turn key expiry off for that machine in the Tailscale admin console.
-
-The guard, its units and the VPS shell hook are kept in `psync/vps/` (`install.sh user` / `sudo
-install.sh root` put them back on a rebuilt VPS; stow does not link that directory).
-
-Undo it: `sudo systemctl disable --now psync-ssh-guard.timer` and
-`sudo iptables -I INPUT 1 -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT`. The
-pre-change firewall is kept in `/root/psync-fw-backup` (`rules.v4`, `v4.dump`). `rpcbind` (port 111,
-unused) is disabled. The OCI security list was not touched: it is a second layer you can
-tighten in the console.
-
-### Pairing a new host (or replacing one)
-
-Every host is a full peer, so adding the third or the fifth is the same as adding the second, and a
-lost host is replaced the same way (RUNBOOK.md, "Adding or replacing a host"). Debian, Ubuntu and
-Arch; `install.sh --plan` shows what it would do without changing anything.
-
-```bash
-# 1. Same user name and home path as the other hosts (/home/jo). Copy the psync package over before
-#    the first sync (the shared ignore file must exist there), then install the tools and link it:
-tar -C ~/projects -cf - dotfiles/psync | ssh NEWHOST 'mkdir -p ~/projects && tar -C ~/projects -xpf -'
-ssh NEWHOST 'bash ~/projects/dotfiles/psync/install.sh'
-# 2. On the new host, join through ONE host that is already in (the tailnet ACL only allows
-#    connections towards the PC, so the new host dials it):
-psync setup --peer-id <device ID of that host> --peer-name pc --peer-address tcp://<its tailscale IP>:22000 --listen tcp://127.0.0.1:22000
-# 3. On that host, accept the new one; the other hosts learn about it from there (introducer):
-psync add-host --id <the new host's device ID> --name <name>
-# 4. See the mesh and prove it end to end:
-psync hosts
-psync doctor --roundtrip
-```
-
-Two hosts that should keep syncing when the host that introduced them is off need each other's
-address: `psync add-host --id ID --name NAME --address tcp://HOST:22000` on both (`psync hosts` says
-which hosts are reached "through" another and which directly). Adding a host changes the folder
-configuration, so Syncthing rescans the folder (minutes on a large one).
+Day to day: `bifrost wait` on the host you are leaving; the host you arrive on runs
+`bifrost ready` by itself. Everything else (health checks, backups, recovery, adding or
+replacing a host, the VPS's public-SSH guard): `~/projects/bifrost/README.md` and `RUNBOOK.md`.

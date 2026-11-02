@@ -19,7 +19,6 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `lazygit` | `~/.config/lazygit/` |
 | `mako` | `~/.config/mako/config` |
 | `nvim` | `~/.config/nvim/` |
-| `psync` | `~/.local/bin/psync`, `~/.config/psync/`, `~/.config/systemd/user/psync-*` (`tests/`, `vps/` and `RUNBOOK.md` stay in the repo, see `.stow-local-ignore`) |
 | `ssh` | `~/.ssh/config` |
 | `starship` | `~/.config/starship.toml` |
 | `tmux` | `~/.tmux.conf` |
@@ -28,6 +27,10 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `zsh` | `~/.zshrc`, `~/.p10k.zsh` |
 
 `archive/` holds old X11/i3 packages — not stowed, kept for reference.
+
+`bifrost/` (my ignore rules for bifrost sync) and `vps/` (the VPS's `~/.zshrc` and `ai` wrapper,
+installed by `vps/install.sh`) are not stow packages either: each has a catch-all
+`.stow-local-ignore`. bifrost itself lives in `~/projects/bifrost`, not here.
 
 **This table must always reflect reality.** When a package is added, removed, or its target changes, update it immediately — re-mapping is always correct and expected.
 
