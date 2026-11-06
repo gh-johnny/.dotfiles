@@ -10,7 +10,7 @@ zsh        zsh        interactive zsh starts clean, my functions defined :: out=
 zsh        zsh        zshenv keeps the API key out of the environment   :: zsh -c '[[ -z ${ANTHROPIC_API_KEY:-} ]]'
 git        git        git reads my identity                             :: [[ $(git config --global user.email) == *@* ]]
 git        git        git reads the bifrost-safe index settings          :: [[ $(git config --global core.trustctime) == false ]]
-tmux       tmux       tmux reads .tmux.conf (prefix is C-Space)          :: tmux -L dot-verify -f ~/.tmux.conf start-server \; show -g prefix \; kill-server 2>&1 | grep -q C-Space
+tmux       tmux       tmux reads .tmux.conf (prefix is C-Space)          :: TMUX_TMPDIR=$(mktemp -d) tmux -L dot-verify -f ~/.tmux.conf start-server \; show -g prefix \; kill-server 2>&1 | grep -q C-Space
 nvim       nvim       neovim loads init.lua                             :: timeout 120 nvim --headless '+lua print(vim.g.mapleader == " " and "leader ok" or "no leader")' +qa 2>&1 | grep -q 'leader ok'
 starship   starship   starship.toml is valid                            :: starship print-config >/dev/null
 fastfetch  fastfetch  fastfetch config parses                           :: fastfetch --config ~/.config/fastfetch/config.jsonc --pipe -s title >/dev/null

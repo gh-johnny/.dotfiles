@@ -21,7 +21,8 @@ USER=${USER:-$(id -un)} # docker and cron do not set it
 export USER
 
 # What dot installs must be visible to the checks that follow it in the same run.
-export PATH="$HOME/.local/bin:$PATH:$HOME/.local/share/mise/shims"
+# (dot's own nix profile, see lib/pkg/nix.sh, sits right after ~/.local/bin)
+export PATH="$HOME/.local/bin:${XDG_STATE_HOME:-$HOME/.local/state}/dot/nix-profile/bin:$PATH:$HOME/.local/share/mise/shims"
 
 # shellcheck source=../lib/core.sh
 source "$DOT_ROOT/lib/core.sh"

@@ -12,10 +12,11 @@ DOT_MISE_CONF=${XDG_CONFIG_HOME:-$HOME/.config}/mise/conf.d/dot.toml
 
 # installer_run NAME: run installers.list's script for NAME unless its check command exists.
 installer_run() {
-  local line check shell url f
+  local line check shell url flags f
   line=$(installer_line "$1") || { err "no installer named $1"; return 1; }
-  read -r check shell url <<<"$line"
+  read -r check shell url flags <<<"$line"
   installer_present "$check" && return 0
+  installer_unsupported "$flags" && { warn "$1: needs ${flags#libc=}, this is $OS_LIBC; skipping"; return 0; }
   local host=${url#*://}; host=${host%%/*}
   online "$host" || { warn "$1: $host is unreachable, skipping"; return 1; }
   info "installing $1 ($url)"
@@ -24,6 +25,9 @@ installer_run() {
   act "$shell" "$f" || { err "$1: installer failed"; return 1; }
   hash -r
 }
+
+# installer_unsupported FLAGS: libc=glibc on a musl system (vendor binaries built for glibc)
+installer_unsupported() { [[ $1 == *libc=glibc* && $OS_LIBC == musl ]]; }
 
 # installer_present CHECK: a command name, or a path (~ allowed) that must exist.
 installer_present() {
@@ -34,8 +38,9 @@ installer_present() {
 mod_installers_apply() {
   system_plan
   local name check shell url logical rc=0 n=0
-  while read -r name check shell url; do
+  while read -r name check shell url flags; do
     installer_present "$check" && continue
+    installer_unsupported "${flags:-}" && continue
     n=$((n + 1)); installer_run "$name" || rc=1
   done < <(list_lines installers.list)
   while IFS=$'\t' read -r logical name; do
@@ -48,8 +53,11 @@ mod_installers_apply() {
 mod_installers_status() {
   system_plan
   local name check shell url logical
-  while read -r name check shell url; do
-    if installer_present "$check"; then report ok "$name"; else report miss "$name ($url)"; fi
+  while read -r name check shell url flags; do
+    if installer_present "$check"; then report ok "$name"
+    elif installer_unsupported "${flags:-}"; then report skip "$name (needs ${flags#libc=})"
+    else report miss "$name ($url)"
+    fi
   done < <(list_lines installers.list)
   while IFS=$'\t' read -r logical name; do report miss "$logical (installer $name)"; done <"$DOT_RUN/plan-script"
 }
@@ -82,7 +90,15 @@ mise_ensure() {
   installer_run mise && hash -r && has mise
 }
 
+# mise_cannot_run: generic Linux binaries need /lib64's loader, which nix systems only have
+# through nix-ld. There, runtimes come from nixpkgs instead.
+mise_cannot_run() { [[ $OS_PKG == nix && ! -e /lib64/ld-linux-x86-64.so.2 && ! -e /lib/ld-linux-aarch64.so.1 ]]; }
+
 mod_mise_apply() {
+  if mise_cannot_run; then
+    warn "mise: prebuilt binaries cannot run here (nix without nix-ld: programs.nix-ld.enable = true); skipping"
+    return 0
+  fi
   local wanted conf=${XDG_CONFIG_HOME:-$HOME/.config}/mise/config.toml
   wanted=$(_mise_wanted)
   if [[ -z $wanted && ! -e $conf ]]; then ok "mise: nothing to do"; return 0; fi
@@ -163,10 +179,15 @@ mod_uv_apply() {
   fi
   have=$(_uv_tools)
   local n=0
-  while read -r name spec; do
+  local opt py
+  while read -r name spec opt; do
     grep -qxF "$name" <<<"$have" && continue
     n=$((n + 1))
-    act uv tool install --quiet "${spec:-$name}" || rc=1
+    # py=X.Y: a Python the tool has wheels for (a brand-new system Python means compiling them)
+    [[ $spec == py=* ]] && { opt=$spec; spec=''; }
+    py=()
+    [[ ${opt:-} == py=* ]] && py=(--python "${opt#py=}")
+    act uv tool install --quiet "${py[@]}" "${spec:-$name}" || rc=1
   done < <(list_lines uv.list)
   ((n)) || ok "uv: tools installed"
   return $rc

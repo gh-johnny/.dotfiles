@@ -43,6 +43,14 @@ report() {
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# has_real CMD: on PATH and not a busybox applet standing in for the real tool (busybox less,
+# unzip... lack half the options my configs and scripts use)
+has_real() {
+  local p
+  p=$(command -v "$1" 2>/dev/null) || return 1
+  [[ $(readlink -f "$p") != */busybox* ]]
+}
+
 # qgrep ARGS...: grep -q for the end of a pipeline. grep -q exits at the first match, the writer
 # then dies of SIGPIPE, and under pipefail the whole pipeline reports failure.
 qgrep() { grep "$@" >/dev/null; }
@@ -97,8 +105,9 @@ online() {
   [[ -f $f ]] && { [[ $(<"$f") == 1 ]]; return; }
   echo 0 >"$f"
   for i in 1 2; do
-    if { has curl && curl -fsS -m 6 -o /dev/null "https://$host" 2>/dev/null; } ||
-      { ! has curl && has wget && wget -q -T 6 -O /dev/null "https://$host" 2>/dev/null; }; then
+    # any HTTP answer means reachable: claude.ai and co. answer bots with a 403, that is not "down"
+    if { has curl && [[ $(curl -sS -m 6 -o /dev/null -w '%{http_code}' "https://$host" 2>/dev/null) != 000 ]]; } ||
+      { ! has curl && has wget && wget -q -T 6 --spider "https://$host" 2>&1 | grep -qv 'unable to resolve\|failed'; }; then
       echo 1 >"$f"; break
     fi
   done

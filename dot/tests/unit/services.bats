@@ -29,7 +29,7 @@ L
   assert_output "ROOT systemctl enable docker"
   OS_INIT_LIVE=1
   run svc_enable system docker
-  assert_output "ROOT systemctl enable --now docker"
+  assert_output "ROOT systemctl enable --now --no-block docker"
 }
 
 @test "runit: enabling is a link into the service dir" {

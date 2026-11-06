@@ -86,6 +86,17 @@ _shell_path() {
   command -v "$1" 2>/dev/null
 }
 
+# _set_login_shell PATH: chsh, else usermod, else (no PAM, no shadow: minimal images) the passwd
+# line itself.
+_set_login_shell() {
+  if has chsh && root chsh -s "$1" "$USER" 2>/dev/null; then return 0; fi
+  if has usermod && root usermod -s "$1" "$USER" 2>/dev/null; then return 0; fi
+  grep -q "^$USER:" /etc/passwd || return 1
+  local tmp="$DOT_RUN/passwd"
+  awk -F: -v OFS=: -v u="$USER" -v s="$1" '$1 == u { $7 = s } 1' /etc/passwd >"$tmp" || return 1
+  root sh -c "cat '$tmp' >/etc/passwd"
+}
+
 # _is_login_shell PATH: is PATH the login shell? (/bin/zsh and /usr/bin/zsh are one file on usrmerge)
 _is_login_shell() { [[ -n $1 && $(readlink -f "$(_login_shell)") == "$(readlink -f "$1")" ]]; }
 
@@ -100,10 +111,7 @@ mod_shell_apply() {
     if [[ $OS_NIXOS == 1 ]]; then warn "NixOS: set users.users.$USER.shell = pkgs.$DOT_SHELL in configuration.nix"
     else
       grep -qxF "$want" /etc/shells 2>/dev/null || root sh -c "echo '$want' >>/etc/shells"
-      if has chsh; then root chsh -s "$want" "$USER" || rc=1
-      elif has usermod; then root usermod -s "$want" "$USER" || rc=1
-      else err "no chsh/usermod to make $DOT_SHELL the login shell"; rc=1
-      fi
+      _set_login_shell "$want" || { err "could not make $want the login shell"; rc=1; }
     fi
   fi
   if [[ $DOT_SHELL == zsh ]] && in_list zsh "${DOT_STOW[@]}"; then

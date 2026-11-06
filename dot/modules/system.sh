@@ -17,7 +17,7 @@ system_plan() {
     # shellcheck disable=SC2086 # rest is KEY=VAL words
     pkg_parse "$logical" $rest
     ((P_NA)) && continue
-    if [[ -n $P_CMD ]] && has "$P_CMD"; then
+    if [[ -n $P_CMD ]] && has_real "$P_CMD"; then
       # satisfied by mise itself (an earlier run's fallback): still mise's, keep it in its config
       if [[ -n $P_MISE && $(command -v "$P_CMD") == "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/* ]]; then
         printf '%s\t%s\n' "$logical" "$P_MISE" >>"$DOT_RUN/plan-mise"

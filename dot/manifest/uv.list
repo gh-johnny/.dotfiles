@@ -1,7 +1,8 @@
 # Python CLI tools, by group, installed with `uv tool install`.
 #
-#   GROUP  TOOL-NAME  [SPEC]      (SPEC defaults to the name; extras and pins go there)
+#   GROUP  TOOL-NAME  [SPEC]  [py=X.Y]   (SPEC defaults to the name; extras and pins go there;
+#                                        py= picks a Python uv provides, one with wheels for it)
 
 dev       git-filter-repo
-ai        graphifyy     graphifyy[anthropic]
-ai        headroom-ai   headroom-ai[proxy,mcp]==0.31.0
+ai        graphifyy     graphifyy[anthropic]               py=3.13
+ai        headroom-ai   headroom-ai[proxy,mcp]==0.31.0     py=3.13

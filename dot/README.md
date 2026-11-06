@@ -21,6 +21,7 @@ dot apply         # fix it; a second run changes nothing
 | `dot diff [pkg]` | how a real file that replaced a link (an installer's `sed -i`) differs from the repo |
 | `dot capture` | packages installed by hand that no list knows (Omarchy's own lists excluded) |
 | `dot update` | `git pull --ff-only`, then apply |
+| `dot verify [--report F]` | item by item proof: each package installed *and runs*, each link resolves *and its program reads it* (`manifest/checks.list`), services enabled *and running*, plugins present. JSON lines with `--report` |
 | `dot doctor` | distro, backend, init, prerequisites, which hosts are reachable |
 | `dot hosts` | the profiles; `*` marks this machine's |
 | `dot names` | check every packages.list mapping against this distro's repos (used by the tests) |
@@ -98,8 +99,30 @@ A name with no key for this backend but with a fallback is probed: the repos win
 | Slackware | Slackware | slackpkg | best effort: no dependency resolution, stow is not packaged (dot links without it) |
 | Nix | NixOS (and nix elsewhere) | nix-env | user profile only; system and services belong in configuration.nix |
 
-`dot/tests/matrix.sh` runs `cli` in a container per family; see the results table in the
-repo README.
+Every family is tested in containers; see **Tests**.
+
+## Tests
+
+| | what it proves | how |
+|---|---|---|
+| `tests/lint.sh` | ShellCheck-clean | shellcheck (or its docker image) |
+| `tests/unit/*.bats` | the logic, piece by piece: distro detection for all 22 distros, the list language, link states and backups, the plan (repo / mise / installer), act()'s change counter, verify's records | bats in `tests/Dockerfile` (Debian + kcov), against a throwaway HOME |
+| `matrix.sh -m names` | every packages.list mapping exists in each distro's real repos | `dot names` per container |
+| `matrix.sh -m apply` | from nothing, as root: bootstrap, apply, apply again (**must change nothing**), status, `dot verify` passes every item | a container per distro, a snapshot of the working tree |
+| `matrix.sh -m user` | the same as a regular user with sudo | |
+| `matrix.sh -m systemd` | services really start (host `vps`: sshd, docker, tailscaled) | privileged container, systemd as PID 1 |
+| `tests/coverage.py` | **line coverage** (kcov for the unit tests + bash xtrace from every distro run, merged on kcov's map of executable lines) and **item coverage** (each verify item × each run) | markdown + JSON report |
+
+```bash
+dot/tests/all.sh            # all of the above, locally (docker), report in ~/.cache/dot-tests/coverage.md
+dot/tests/all.sh --quick    # arch debian fedora alpine only
+dot/tests/matrix.sh -m apply fedora alma   # one mode, some distros
+```
+
+CI (`.github/workflows/dot.yml`) runs the same jobs in parallel on every push and every Monday
+(distros drop and rename packages without notice), and puts the coverage report in the job summary.
+GitHub being unreachable from a test box is detected per run: only the steps that need it
+(shell plugins, mise downloads, neovim plugins) are excused there, never anything else.
 
 ## Safety
 

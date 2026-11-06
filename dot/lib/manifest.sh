@@ -105,17 +105,19 @@ list_lines_all() {
 #   P_MISE    mise tool to fall back to
 #   P_SCRIPT  installers.list entry to fall back to
 #   P_CMD     a command that, when on PATH, already satisfies it (however it got there)
+#   P_VER     what `dot verify` runs it with ('-': do not run it, just check it is there)
 #   P_NA      1 when the line does not apply to this backend at all (only=)
 pkg_parse() {
   local logical=$1 kv k v only='' explicit='' has_explicit=0
   shift
-  P_MISE='' P_SCRIPT='' P_CMD='' P_NA=0
+  P_MISE='' P_SCRIPT='' P_CMD='' P_NA=0 P_VER=
   for kv; do
     k=${kv%%=*} v=${kv#*=}
     case $k in
       mise) P_MISE=$v ;;
       script) P_SCRIPT=$v ;;
       cmd) P_CMD=$v ;;
+      ver) P_VER=$v ;;
       only) only=$v ;;
       "$OS_PKG") explicit=$v has_explicit=1 ;;
     esac

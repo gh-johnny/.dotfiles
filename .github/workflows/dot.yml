@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [arch, manjaro, debian, debian12, ubuntu, mint, kali, fedora, alma, opensuse, void, alpine, nix]
+        distro: [arch, manjaro, debian, debian12, ubuntu, mint, kali, fedora, alma, opensuse, void, alpine, nix, slackware, gentoo]
     steps:
       - uses: actions/checkout@v4
       - run: dot/tests/matrix.sh -m names -j 1 ${{ matrix.distro }}
@@ -76,6 +76,8 @@ jobs:
           - { mode: apply, distro: void }
           - { mode: apply, distro: alpine }
           - { mode: apply, distro: nix }
+          - { mode: apply, distro: slackware }
+          - { mode: apply, distro: gentoo }
           - { mode: user, distro: arch }
           - { mode: user, distro: debian }
           - { mode: user, distro: fedora }

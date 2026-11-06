@@ -134,6 +134,8 @@ alias claude-mem='$HOME/.bun/bin/bun "$HOME/.claude/plugins/marketplaces/thedotm
 command -v keychain >/dev/null && [[ -f ~/.ssh/gh ]] && eval $(DISPLAY="" WAYLAND_DISPLAY="" SSH_ASKPASS="" keychain --eval --quiet --nogui ~/.ssh/gh)
 
 
+# packages dot installed with nix (dot/lib/pkg/nix.sh keeps its own profile)
+[[ -d ~/.local/state/dot/nix-profile/bin ]] && export PATH="$HOME/.local/state/dot/nix-profile/bin:$PATH"
 # mise tools on hosts without the ~/.local/bin symlinks (last: never shadows anything)
 [[ -d ~/.local/share/mise/shims ]] && export PATH="$PATH:$HOME/.local/share/mise/shims"
 

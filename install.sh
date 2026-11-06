@@ -80,7 +80,11 @@ if [ -n "$need" ]; then
       [ -d /var/db/repos/gentoo/profiles ] || $SUDO emerge-webrsync -q
       $SUDO emerge --noreplace --quiet --getbinpkg $need ;;
     slackpkg) $SUDO slackpkg -batch=on -default_answer=y install $need ;;
-    nix) nix-env -f '<nixpkgs>' -iA $need ;;
+    nix) # dot's own profile (dot/lib/pkg/nix.sh): rebuilding the user's can drop outputs
+      NIXP=${XDG_STATE_HOME:-$HOME/.local/state}/dot/nix-profile
+      mkdir -p "$(dirname "$NIXP")"
+      nix-env -p "$NIXP" -f '<nixpkgs>' -iA $need
+      PATH="$NIXP/bin:$PATH"; export PATH ;;
     *) die "no package manager I know; install$need, then rerun" ;;
   esac
 fi

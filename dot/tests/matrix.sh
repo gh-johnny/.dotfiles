@@ -7,7 +7,7 @@
 # MODE
 #   names    every packages.list mapping exists in the distro's repos
 #   apply    as root: bootstrap, apply, apply again, status, verify
-#   user     the same as a regular user with passwordless sudo (the real-life case)
+#   user     the same as a regular user with passwordless sudo (the real-life case), host dev
 #   systemd  the same with systemd as PID 1 (privileged container): services really start.
 #            Defaults to host vps (sshd, docker, tailscaled) and distros arch fedora
 #
@@ -30,7 +30,7 @@ declare -A IMAGE=(
   [opensuse]=opensuse/tumbleweed:latest
   [void]=ghcr.io/void-linux/void-glibc:latest
   [alpine]=alpine:latest             [gentoo]=gentoo/stage3:latest
-  [nix]=nixos/nix:latest
+  [nix]=nixos/nix:latest             [slackware]=aclemons/slackware:15.0
 )
 # systemd as PID 1: what to install first and where init lives
 declare -A SYSTEMD_BOOT=(
@@ -39,7 +39,7 @@ declare -A SYSTEMD_BOOT=(
   [debian]='apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv dbus >/dev/null && exec /sbin/init'
   [ubuntu]='apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv dbus >/dev/null && exec /sbin/init'
 )
-ORDER=(arch manjaro debian debian12 ubuntu mint kali fedora alma opensuse void alpine gentoo nix)
+ORDER=(arch manjaro debian debian12 ubuntu mint kali fedora alma opensuse void alpine gentoo nix slackware)
 
 mode=apply host='' jobs=3
 while getopts 'm:H:j:' o; do
@@ -49,7 +49,9 @@ shift $((OPTIND - 1))
 if (($#)); then ORDER=("$@")
 elif [[ $mode == systemd ]]; then ORDER=(arch fedora)
 fi
-[[ -n $host ]] || { [[ $mode == systemd ]] && host=vps || host=cli; }
+if [[ -z $host ]]; then
+  case $mode in systemd) host=vps ;; user) host=dev ;; *) host=cli ;; esac
+fi
 
 mkdir -p "$LOGS/run"
 
@@ -109,7 +111,7 @@ one() {
 # section LOG NAME: the lines of one ===== section of a container log
 section() { awk -v s="===== $2" '$0 == s {f = 1; next} /^===== / {f = 0} f' "$1"; }
 
-GITHUB_OPS='git clone|mise install|install_plugins|installer-'
+GITHUB_OPS='git clone|mise install|install_plugins|installer-|mise/conf.d|uv tool install|Lazy! install'
 
 verdict() {
   local d=$1 log=$2 secs=$3 report=$4 why=() m flaky=0
@@ -138,6 +140,16 @@ verdict() {
   else
     why+=("no verify report")
   fi
+
+  # read-only commands never fail; the dry run after all that predicts nothing to do
+  local c
+  for c in doctor hosts capture diff; do
+    grep -q "^CMD_${c}_EXIT=0" "$log" || why+=("dot $c failed")
+  done
+  local dry
+  dry=$(section "$log" dry | grep '^  \$ ' || true)
+  ((flaky)) && dry=$(grep -vE "$GITHUB_OPS" <<<"$dry" || true)
+  [[ -z $dry ]] || why+=("dry run predicts: $(head -2 <<<"$dry" | sed 's/^  \$ //' | paste -sd'|')")
 
   local note=''
   ((flaky)) && note="  (github.com dropped out: shell/mise excused)"

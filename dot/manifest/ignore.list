@@ -15,3 +15,10 @@ pacman  nvm                   # superseded by mise; kept until the zshrc stops s
 pacman  obsidian-cli-git-debug
 pacman  electron37
 pacman  accounts-qml-module
+
+apk     alpine-baselayout
+apk     alpine-keys
+apk     alpine-release
+apk     apk-tools
+apk     busybox
+apk     musl-utils

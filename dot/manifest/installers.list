@@ -1,13 +1,15 @@
 # Vendor install scripts, by group. Run only when CHECK is missing (a command name, or a path).
 # Group "-" = never installed by group: only as a packages.list `script=` fallback.
 #
-#   GROUP  NAME  CHECK  SHELL  URL
+#   GROUP  NAME  CHECK  SHELL  URL  [libc=glibc]
+#
+# libc=glibc: the vendor ships glibc binaries only; skipped (and reported so) on musl.
 
 ai   claude        claude        bash  https://claude.ai/install.sh
-ai   cursor-agent  cursor-agent  bash  https://cursor.com/install
-ai   copilot       copilot       bash  https://gh.io/copilot-install
-ai   antigravity   agy           bash  https://antigravity.google/cli/install.sh
-ai   hermes        hermes        bash  https://hermes-agent.nousresearch.com/install.sh
+ai   cursor-agent  cursor-agent  bash  https://cursor.com/install  libc=glibc
+ai   copilot       copilot       bash  https://gh.io/copilot-install  libc=glibc
+ai   antigravity   agy           bash  https://antigravity.google/cli/install.sh  libc=glibc
+ai   hermes        hermes        bash  https://hermes-agent.nousresearch.com/install.sh  libc=glibc
 
 -    mise          mise          sh    https://mise.run
 -    uv            uv            sh    https://astral.sh/uv/install.sh

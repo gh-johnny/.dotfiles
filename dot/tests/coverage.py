@@ -95,17 +95,21 @@ def main():
     code = load_cobertura(a.cobertura) if a.cobertura and os.path.exists(a.cobertura) else {}
     traced, per_run = load_traces(a.runs)
 
-    # line coverage: kcov decides what is code; a line counts when the unit tests or any distro ran it
+    # line coverage: what is code = kcov's executable lines plus every line a trace saw run (kcov's
+    # bash parser skips one-line functions, `f() { ...; }`, which is most of the backends); a line
+    # counts as covered when the unit tests or any distro ran it
     files = {}
-    for f, lines in sorted(code.items()):
+    for f in sorted(set(code) | set(traced)):
+        lines = code.get(f, {})
         unit = {n for n, h in lines.items() if h > 0}
-        e2e = traced.get(f, set()) & set(lines)
+        e2e = traced.get(f, set())
+        allc = set(lines) | e2e
         files[f] = {
-            "lines": len(lines),
+            "lines": len(allc),
             "unit": len(unit),
             "e2e": len(e2e),
             "covered": len(unit | e2e),
-            "uncovered": sorted(set(lines) - unit - e2e),
+            "uncovered": sorted(allc - unit - e2e),
         }
     total = sum(v["lines"] for v in files.values())
     covered = sum(v["covered"] for v in files.values())

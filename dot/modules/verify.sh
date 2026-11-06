@@ -23,8 +23,9 @@ vrec() {
 # _runs CMD: does the program start? First version-ish flag that exits 0 wins. Returns 126 when
 # the kernel refused to exec it (file capabilities in an unprivileged container).
 _runs() {
-  local f rc=1
-  for f in --version -V version -v; do
+  local f rc=1 flags=(--version -V version -v)
+  [[ -n ${2:-} ]] && flags=("$2")
+  for f in "${flags[@]}"; do
     LANG=${LANG:-C.UTF-8} timeout 20 "$1" "$f" </dev/null >/dev/null 2>&1 && return 0
     rc=$?
     ((rc == 126)) && return 126
@@ -34,7 +35,7 @@ _runs() {
 
 _where() { # how is a packages.list line satisfied here (prints it), or fail
   local logical=$1 path
-  if [[ -n $P_CMD ]] && path=$(command -v "$P_CMD"); then
+  if [[ -n $P_CMD ]] && has_real "$P_CMD" && path=$(command -v "$P_CMD"); then
     if [[ $path == "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/* ]]; then echo "mise"
     elif [[ -n $P_SYS && -z $(pkg_missing $P_SYS) ]]; then echo "$OS_PKG"
     else echo "$path"
@@ -54,9 +55,9 @@ verify_system() {
     ((P_NA)) && continue
     if [[ -z $P_SYS && -z $P_MISE && -z $P_SCRIPT ]]; then vrec skip pkg "$logical" "not on $OS_PKG"; continue; fi
     if ! how=$(_where "$logical"); then vrec fail pkg "$logical" "not installed"; continue; fi
-    if [[ -n $P_CMD ]]; then
+    if [[ -n $P_CMD && $P_VER != - ]]; then
       local rc=0
-      _runs "$P_CMD" || rc=$?
+      _runs "$P_CMD" $P_VER || rc=$?
       case $rc in
         0) ;;
         126)
@@ -141,10 +142,8 @@ verify_services() {
         if ! svc_exists "$scope" "$name"; then vrec skip service "$scope $name" "not installed"; continue; fi
         if ! svc_enabled "$scope" "$name"; then vrec fail service "$scope $name" "not enabled"; continue; fi
         if [[ $OS_INIT_LIVE == 1 && $OS_INIT == systemd ]]; then
-          local flag=()
-          [[ $scope == user ]] && flag=(--user)
-          if systemctl "${flag[@]}" is-active -q "$name" 2>/dev/null; then vrec pass service "$scope $name" "enabled, active"
-          else vrec fail service "$scope $name" "enabled but not running"
+          if svc_active "$scope" "$name"; then vrec pass service "$scope $name" "enabled, active"
+          else vrec fail service "$scope $name" "enabled but $(systemctl is-active "$name" 2>/dev/null)"
           fi
         else vrec pass service "$scope $name" "enabled (init not running)"
         fi ;;
@@ -167,11 +166,15 @@ verify_tools() {
     done
   fi
   if in_list installers "${DOT_MODULES[@]}"; then
-    while read -r name check shell url; do
-      installer_present "$check" && vrec pass installer "$name" || vrec fail installer "$name" "$check missing"
+    while read -r name check shell url flags; do
+      if installer_present "$check"; then vrec pass installer "$name"
+      elif installer_unsupported "${flags:-}"; then vrec skip installer "$name" "needs ${flags#libc=}"
+      else vrec fail installer "$name" "$check missing"
+      fi
     done < <(list_lines installers.list)
   fi
-  if in_list mise "${DOT_MODULES[@]}" && has mise; then
+  if in_list mise "${DOT_MODULES[@]}" && mise_cannot_run; then vrec skip mise tools "no /lib64 loader (nix without nix-ld)"; fi
+  if in_list mise "${DOT_MODULES[@]}" && has mise && ! mise_cannot_run; then
     local line
     while read -r line; do [[ -n $line ]] && vrec fail mise "$line" "missing"; done < <(cd "$HOME" && mise ls --missing 2>/dev/null | awk '{print $1"@"$2}')
     while read -r line; do [[ -n $line ]] && vrec pass mise "$line"; done < <(cd "$HOME" && mise ls --installed --current 2>/dev/null | awk '{print $1"@"$2}')

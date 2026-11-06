@@ -19,7 +19,7 @@ if [ "$mode" = user ]; then
   useradd -m -s /bin/sh tester 2>/dev/null || adduser -D -s /bin/sh tester
   mkdir -p /etc/sudoers.d && echo 'tester ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/tester
   [ -d /out ] && chmod 777 /out
-  exec su tester -c "DOT_TEST_TAG='${DOT_TEST_TAG:-}' DOT_TEST_DISTRO='${DOT_TEST_DISTRO:-}' sh /src/dot/tests/in-container.sh apply-as-user $host"
+  exec sudo -u tester env HOME=/home/tester DOT_TEST_TAG="${DOT_TEST_TAG:-}" DOT_TEST_DISTRO="${DOT_TEST_DISTRO:-}" sh /src/dot/tests/in-container.sh apply-as-user "$host"
 fi
 if [ "$mode" = apply-as-user ]; then
   export USER=tester HOME=/home/tester
@@ -43,4 +43,12 @@ bash "$D" status >/tmp/status.log 2>&1
 echo "STATUS_EXIT=$?"
 bash "$D" verify --report "$report" >/tmp/verify.log 2>&1
 echo "VERIFY_EXIT=$?"
-for f in run1 run2 status verify; do echo "===== $f"; cat /tmp/$f.log; done
+# the read-only commands must not fail anywhere, and a dry run must predict zero changes
+for c in doctor hosts capture diff; do
+  bash "$D" "$c" >/tmp/cmd-$c.log 2>&1
+  echo "CMD_${c}_EXIT=$?"
+done
+bash "$D" apply --dry-run --yes >/tmp/dry.log 2>&1
+echo "DRY_EXIT=$?"
+for f in run1 run2 status verify dry; do echo "===== $f"; cat /tmp/$f.log; done
+for c in doctor hosts capture diff; do echo "===== cmd-$c"; cat /tmp/cmd-$c.log; done
