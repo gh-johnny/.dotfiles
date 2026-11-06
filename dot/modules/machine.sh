@@ -3,7 +3,7 @@
 #   self      ~/.local/bin/dot → this checkout
 #   omarchy   the Omarchy base (Arch only), installed before anything else touches ~/.config
 #   flatpak   GUI apps from Flathub on distros where arch.list does not apply
-#   shell     login shell, Powerlevel10k, tmux plugin manager + plugins
+#   shell     login shell, Powerlevel10k, tmux plugin manager + plugins, neovim plugins
 #   services  system/user units and user groups (manifest/services.list)
 #   ssh       the SSH key the configs expect
 
@@ -12,7 +12,7 @@
 mod_self_apply() {
   local link="$HOME/.local/bin/dot"
   [[ $(readlink -f "$link" 2>/dev/null) == "$(readlink -f "$DOT_ROOT/bin/dot")" ]] && return 0
-  run mkdir -p "${link%/*}" && run ln -sfn "$DOT_ROOT/bin/dot" "$link"
+  act mkdir -p "${link%/*}" && act ln -sfn "$DOT_ROOT/bin/dot" "$link"
 }
 mod_self_status() {
   if [[ $(readlink -f "$HOME/.local/bin/dot" 2>/dev/null) == "$(readlink -f "$DOT_ROOT/bin/dot")" ]]; then
@@ -34,7 +34,7 @@ mod_omarchy_apply() {
   confirm "Install omarchy now?" n || { warn "skipped omarchy"; return 0; }
   local f="$DOT_RUN/omarchy-install"
   fetch https://omarchy.org/install >"$f" || { err "omarchy download failed"; return 1; }
-  run bash "$f"
+  act bash "$f"
 }
 mod_omarchy_status() {
   [[ $DOT_OMARCHY == 1 ]] || return 0
@@ -56,10 +56,10 @@ mod_flatpak_apply() {
   ((${#want[@]})) || return 0
   if ! has flatpak; then pkg_install flatpak || return 1; hash -r; fi
   flatpak remotes --user 2>/dev/null | qgrep '^flathub' ||
-    run flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || return 1
+    act flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || return 1
   for id in "${want[@]}"; do flatpak info --user "$id" >/dev/null 2>&1 || missing+=("$id"); done
   ((${#missing[@]})) || { ok "flatpak: apps installed"; return 0; }
-  run flatpak install --user -y --noninteractive flathub "${missing[@]}"
+  act flatpak install --user -y --noninteractive flathub "${missing[@]}"
 }
 mod_flatpak_status() {
   local id
@@ -75,14 +75,28 @@ mod_flatpak_status() {
 P10K_DIR="$HOME/powerlevel10k"
 TPM_DIR="$HOME/.tmux/plugins/tpm"
 
+# _shell_path NAME: the path /etc/shells lists for NAME (what chsh accepts), else the PATH one.
+_shell_path() {
+  local p
+  if [[ -r /etc/shells ]]; then
+    while read -r p; do
+      [[ $p == */"$1" && -x $p ]] && { echo "$p"; return 0; }
+    done </etc/shells
+  fi
+  command -v "$1" 2>/dev/null
+}
+
+# _is_login_shell PATH: is PATH the login shell? (/bin/zsh and /usr/bin/zsh are one file on usrmerge)
+_is_login_shell() { [[ -n $1 && $(readlink -f "$(_login_shell)") == "$(readlink -f "$1")" ]]; }
+
 _login_shell() { getent passwd "$USER" 2>/dev/null | cut -d: -f7 || awk -F: -v u="$USER" '$1 == u {print $7}' /etc/passwd; }
 
 mod_shell_apply() {
   local rc=0 want
   USER=${USER:-$(id -un)}
-  want=$(command -v "$DOT_SHELL" 2>/dev/null)
+  want=$(_shell_path "$DOT_SHELL")
   if [[ -z $want ]]; then err "$DOT_SHELL is not installed"; rc=1
-  elif [[ $(_login_shell) != "$want" ]]; then
+  elif ! _is_login_shell "$want"; then
     if [[ $OS_NIXOS == 1 ]]; then warn "NixOS: set users.users.$USER.shell = pkgs.$DOT_SHELL in configuration.nix"
     else
       grep -qxF "$want" /etc/shells 2>/dev/null || root sh -c "echo '$want' >>/etc/shells"
@@ -97,16 +111,36 @@ mod_shell_apply() {
   fi
   if in_list tmux "${DOT_STOW[@]}"; then
     # an empty dir is what a broken submodule used to leave behind
-    [[ -d $TPM_DIR && -z $(ls -A "$TPM_DIR") ]] && run rmdir "$TPM_DIR"
+    [[ -d $TPM_DIR && -z $(ls -A "$TPM_DIR") ]] && act rmdir "$TPM_DIR"
     if git_clone https://github.com/tmux-plugins/tpm "$TPM_DIR"; then
       # install the plugins tmux.conf lists, without opening tmux
       if has tmux && [[ -x $TPM_DIR/bin/install_plugins ]] && _tmux_plugins_missing; then
-        run "$TPM_DIR/bin/install_plugins" >/dev/null || rc=1
+        act "$TPM_DIR/bin/install_plugins" >/dev/null || rc=1
       fi
     else rc=1
     fi
   fi
+  if in_list nvim "${DOT_STOW[@]}" && has nvim; then
+    # first start bootstraps lazy.nvim (git clone from its config); then install what is missing
+    local missing
+    if ! missing=$(_nvim_plugins_missing) || [[ -n $missing ]]; then
+      if online github.com; then
+        info "neovim: installing plugins"
+        act timeout 600 nvim --headless '+Lazy! install' +qa >/dev/null 2>&1 || true
+        missing=$(_nvim_plugins_missing) && [[ -z $missing ]] || { err "neovim plugins still missing: $(echo $missing)"; rc=1; }
+      else
+        warn "github.com is unreachable, skipping neovim plugins"; rc=1
+      fi
+    fi
+  fi
   return $rc
+}
+
+# _nvim_plugins_missing: print the lazy.nvim plugins not installed yet; fails when lazy itself is
+# missing (the config bootstraps it on first start, the plugins come from `Lazy! install`).
+_nvim_plugins_missing() {
+  [[ -d ${XDG_DATA_HOME:-$HOME/.local/share}/nvim/lazy/lazy.nvim ]] || return 1
+  timeout 60 nvim --headless -c 'lua for _, p in pairs(require("lazy.core.config").plugins) do if not (p._ and p._.installed) then io.stdout:write(p.name .. "\n") end end' +qa 2>/dev/null
 }
 
 _tmux_plugins_missing() {
@@ -119,8 +153,8 @@ _tmux_plugins_missing() {
 
 mod_shell_status() {
   local want
-  want=$(command -v "$DOT_SHELL" 2>/dev/null)
-  if [[ -n $want && $(_login_shell) == "$want" ]]; then report ok "login shell $want"
+  want=$(_shell_path "$DOT_SHELL")
+  if _is_login_shell "$want"; then report ok "login shell $want"
   else report miss "login shell is $(_login_shell), want $DOT_SHELL"
   fi
   if [[ $DOT_SHELL == zsh ]] && in_list zsh "${DOT_STOW[@]}"; then
@@ -206,12 +240,12 @@ mod_services_status() {
 mod_ssh_apply() {
   [[ -n $DOT_SSH_KEY ]] || return 0
   local key=${DOT_SSH_KEY/#\~/$HOME}
-  [[ -d $HOME/.ssh ]] || run mkdir -p "$HOME/.ssh"
-  [[ $(stat -c %a "$HOME/.ssh" 2>/dev/null) == 700 ]] || run chmod 700 "$HOME/.ssh"
+  [[ -d $HOME/.ssh ]] || act mkdir -p "$HOME/.ssh"
+  [[ $(stat -c %a "$HOME/.ssh" 2>/dev/null) == 700 ]] || act chmod 700 "$HOME/.ssh"
   [[ -f $key ]] && return 0
-  if [[ ! -t 0 || $DOT_YES == 1 ]]; then warn "no SSH key at $DOT_SSH_KEY: run dot apply --only ssh in a terminal to create it"; return 0; fi
+  if [[ ! -t 0 || $DOT_YES == 1 ]]; then warn "no SSH key at $DOT_SSH_KEY: act dot apply --only ssh in a terminal to create it"; return 0; fi
   info "creating $DOT_SSH_KEY (you will be asked for a passphrase)"
-  run ssh-keygen -t ed25519 -C "${DOT_SSH_KEY_COMMENT:-$USER@$(hostname)}" -f "$key" || return 1
+  act ssh-keygen -t ed25519 -C "${DOT_SSH_KEY_COMMENT:-$USER@$(hostname)}" -f "$key" || return 1
   say; ok "add it to GitHub: https://github.com/settings/keys"; cat "$key.pub"
 }
 mod_ssh_status() {

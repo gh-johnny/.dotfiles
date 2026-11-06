@@ -23,7 +23,7 @@ svc_enable() {
     if [[ -z ${XDG_RUNTIME_DIR:-} || ! -S ${XDG_RUNTIME_DIR}/bus ]]; then
       warn "no user session bus, cannot enable user unit $2 (log in graphically or via ssh and rerun)"; return 1
     fi
-    run systemctl --user enable "${now[@]}" "$2"
+    act systemctl --user enable "${now[@]}" "$2"
   else
     root systemctl enable "${now[@]}" "$2"
   fi

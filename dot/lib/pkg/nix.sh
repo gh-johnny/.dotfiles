@@ -8,6 +8,6 @@ be_missing() {
 }
 be_available() { nix-env -f '<nixpkgs>' -qaA "$1" >/dev/null 2>&1; }
 be_stale()     { ! nix-instantiate --find-file nixpkgs >/dev/null 2>&1; }
-be_refresh()   { run nix-channel --update; }
-be_install()   { run nix-env -f '<nixpkgs>' -iA "$@"; }
+be_refresh()   { act nix-channel --update; }
+be_install()   { act nix-env -f '<nixpkgs>' -iA "$@"; }
 be_explicit()  { nix-env -q | sed -E 's/-[0-9][^-]*$//'; }

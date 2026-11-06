@@ -18,18 +18,18 @@ aur_helper() {
 # aur_bootstrap: build yay-bin from the AUR (makepkg refuses to run as root).
 aur_bootstrap() {
   aur_helper >/dev/null && return 0
-  if [[ $EUID -eq 0 ]]; then warn "AUR needs a regular user (makepkg will not run as root)"; return 1; fi
+  if [[ $EUID -eq 0 ]]; then warn "AUR needs a regular user (makepkg will not act as root)"; return 1; fi
   online aur.archlinux.org || { warn "aur.archlinux.org is unreachable"; return 1; }
   info "bootstrapping yay"
   be_install base-devel git || return 1
   local d="$DOT_RUN/yay-bin"
-  run git clone --depth=1 --quiet https://aur.archlinux.org/yay-bin.git "$d" || return 1
-  (cd "$d" && run makepkg -si --noconfirm)
+  act git clone --depth=1 --quiet https://aur.archlinux.org/yay-bin.git "$d" || return 1
+  (cd "$d" && act makepkg -si --noconfirm)
 }
 
 # aur_install NAME...: through yay/paru; they ask for sudo themselves.
 aur_install() {
   (($#)) || return 0
   aur_bootstrap || return 1
-  run "$(aur_helper)" -S --needed --noconfirm "$@"
+  act "$(aur_helper)" -S --needed --noconfirm "$@"
 }

@@ -8,6 +8,15 @@ DOT_ROOT=$(cd "$(dirname "$DOT_BIN")/.." && pwd)
 DOTFILES=$(cd "$DOT_ROOT/.." && pwd)
 DOT_VERSION=1
 
+# DOT_TRACE=FILE: append every executed line as "file:line" (tests/coverage.py turns the traces of
+# all distros into line coverage; kcov is not packaged everywhere, bash's xtrace is).
+if [[ -n ${DOT_TRACE:-} ]]; then
+  exec {DOT_TRACE_FD}>>"$DOT_TRACE"
+  BASH_XTRACEFD=$DOT_TRACE_FD
+  PS4='+${BASH_SOURCE[0]}:${LINENO}: '
+  set -x
+fi
+
 USER=${USER:-$(id -un)} # docker and cron do not set it
 export USER
 
@@ -37,8 +46,10 @@ dot — my machine, on any Linux
 usage: dot <command> [options]
 
 commands:
-  apply            make this machine match its host profile (safe to rerun: a second run changes nothing)
+  apply            make this machine match its host profile (safe to rerun: a second act changes nothing)
   status           what is missing or drifted, changes nothing (exit 1 when something is off)
+  verify [--report FILE]
+                   item by item proof: packages run, programs read their config, services run
   diff [PKG...]    show how real files that replaced links differ from the repo
   capture          packages installed by hand that no list knows about
   update           git pull the dotfiles, then apply
@@ -48,7 +59,7 @@ commands:
 
 options:
   -H, --host NAME  host profile (remembered in ~/.config/dot/host)
-  -o, --only M,..  run only these modules
+  -o, --only M,..  act only these modules
   -s, --skip M,..  skip these modules
   -n, --dry-run    print what would run, change nothing
   -y, --yes        do not ask (installers that need a choice are skipped)
@@ -58,7 +69,7 @@ modules, in order: ${DOT_ORDER[*]}
 EOF
 }
 
-DOT_HOST_ARG='' DOT_ONLY=() DOT_SKIP=() DOT_ARGS=()
+DOT_HOST_ARG='' DOT_ONLY=() DOT_SKIP=() DOT_ARGS=() DOT_REPORT=''
 cmd=${1:-help}
 [[ $# -gt 0 ]] && shift
 DOT_FLAGS=("$@") # as given, for `update` to hand to apply
@@ -71,6 +82,7 @@ while (($#)); do
     -n | --dry-run) DOT_DRY=1 ;;
     -y | --yes) DOT_YES=1 ;;
     -v | --verbose) DOT_VERBOSE=1 ;;
+    --report) DOT_REPORT=${2:?--report needs a file}; shift ;;
     -h | --help) usage; exit 0 ;;
     -*) die "unknown option $1 (dot help)" ;;
     *) DOT_ARGS+=("$1") ;;
@@ -160,6 +172,12 @@ cmd_status() {
 
 cmd_diff() { setup; links_diff "${DOT_ARGS[@]}"; }
 
+cmd_verify() {
+  setup
+  say "${C_B}dot verify${C_0} · host ${C_B}$DOT_HOST${C_0} · $(os_summary)"
+  verify_run "$DOT_REPORT"
+}
+
 cmd_capture() {
   setup
   local list
@@ -234,6 +252,7 @@ case $cmd in
   apply) cmd_apply ;;
   status) cmd_status ;;
   diff) cmd_diff ;;
+  verify) cmd_verify ;;
   capture) cmd_capture ;;
   update) cmd_update ;;
   doctor) cmd_doctor ;;

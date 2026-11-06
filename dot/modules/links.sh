@@ -39,7 +39,7 @@ _link_walk() {
 _link_backup() { # RELPATH
   local src="$HOME/$1" dst="$DOT_BACKUP/$1"
   [[ -e $src || -L $src ]] || return 0
-  run mkdir -p "${dst%/*}" && run mv "$src" "$dst"
+  act mkdir -p "${dst%/*}" && act mv "$src" "$dst"
 }
 
 # _link_fallback PKG: what stow does, for systems without stow (Slackware): one symlink per file.
@@ -48,8 +48,8 @@ _link_fallback() {
   while IFS= read -r -d '' f; do
     rel=${f#"$dir"/}
     [[ $(readlink -f "$HOME/$rel" 2>/dev/null) == "$(readlink -f "$f")" ]] && continue
-    run mkdir -p "$(dirname "$HOME/$rel")"
-    run ln -sfn "$f" "$HOME/$rel"
+    act mkdir -p "$(dirname "$HOME/$rel")"
+    act ln -sfn "$f" "$HOME/$rel"
   done < <(find "$dir" -mindepth 1 \( -type f -o -type l \) ! -name .stow-local-ignore -print0)
 }
 
@@ -62,8 +62,8 @@ mod_links_apply() {
   DOT_BACKUP="$DOT_STATE/backup/$(date +%Y%m%d-%H%M%S)"
   for d in "${LINK_SHARED_DIRS[@]}"; do
     [[ -e $HOME/$d || -L $HOME/$d ]] && continue
-    run mkdir -p "$HOME/$d"
-    [[ $d == .ssh ]] && run chmod 700 "$HOME/$d"
+    act mkdir -p "$HOME/$d"
+    [[ $d == .ssh ]] && act chmod 700 "$HOME/$d"
   done
   for pkg in "${DOT_STOW[@]}"; do
     [[ -d $DOTFILES/$pkg ]] || { err "stow package '$pkg' does not exist"; rc=1; continue; }
@@ -85,7 +85,7 @@ mod_links_apply() {
     if has stow; then
       local opts=(--dir="$DOTFILES" --target="$HOME" --restow)
       in_list "$pkg" "${DOT_STOW_NOFOLD[@]}" && opts+=(--no-folding)
-      run stow "${opts[@]}" "$pkg" || { err "stow $pkg failed"; rc=1; continue; }
+      act stow "${opts[@]}" "$pkg" || { err "stow $pkg failed"; rc=1; continue; }
     else
       _link_fallback "$pkg" || rc=1
     fi

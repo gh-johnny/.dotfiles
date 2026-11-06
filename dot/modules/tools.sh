@@ -21,7 +21,7 @@ installer_run() {
   info "installing $1 ($url)"
   f="$DOT_RUN/installer-$1"
   fetch "$url" >"$f" || { err "$1: download failed"; return 1; }
-  run "$shell" "$f" || { err "$1: installer failed"; return 1; }
+  act "$shell" "$f" || { err "$1: installer failed"; return 1; }
   hash -r
 }
 
@@ -67,6 +67,7 @@ _mise_conf() {
   if [[ $OS_LIBC == musl ]]; then
     # nodejs.org has no musl binaries; without this mise compiles node from source
     echo '[settings]'
+    echo 'node.compile = false'
     echo 'node.flavor = "musl"'
     echo 'node.mirror_url = "https://unofficial-builds.nodejs.org/download/release/"'
   fi
@@ -90,19 +91,19 @@ mod_mise_apply() {
   new=$(_mise_conf)
   if [[ -n $new ]]; then
     if [[ ! -f $DOT_MISE_CONF || $(<"$DOT_MISE_CONF") != "$new" ]]; then
-      run mkdir -p "${DOT_MISE_CONF%/*}"
+      act mkdir -p "${DOT_MISE_CONF%/*}"
       if [[ $DOT_DRY != 1 ]]; then printf '%s\n' "$new" >"$DOT_MISE_CONF"; fi
       echo "write $DOT_MISE_CONF" >>"$DOT_RUN/changes"
       [[ -n $wanted ]] && info "mise: $(tr '\n' ' ' <<<"$wanted")"
     fi
   elif [[ -f $DOT_MISE_CONF ]]; then
-    run rm -f "$DOT_MISE_CONF"
+    act rm -f "$DOT_MISE_CONF"
   fi
   local missing
   missing=$(cd "$HOME" && mise ls --missing 2>/dev/null | awk '{print $1"@"$2}')
   if [[ -z $missing ]]; then ok "mise: all tools installed"; return 0; fi
   info "mise: installing $(tr '\n' ' ' <<<"$missing")"
-  (cd "$HOME" && { run mise install --yes || { warn "mise install failed, retrying once"; run mise install --yes; }; }) || { err "mise install failed (offline? GitHub rate limit? set GITHUB_TOKEN)"; return 1; }
+  (cd "$HOME" && { act mise install --yes || { warn "mise install failed, retrying once"; act mise install --yes; }; }) || { err "mise install failed (offline? GitHub rate limit? set GITHUB_TOKEN)"; return 1; }
 }
 
 mod_mise_status() {
@@ -133,8 +134,8 @@ mod_npm_apply() {
   for p in "${want[@]}"; do grep -qxF "$p" <<<"$have" || missing+=("$p"); done
   ((${#missing[@]})) || { ok "npm: global packages installed"; return 0; }
   info "npm: installing ${missing[*]}"
-  if has mise; then (cd "$HOME" && run mise exec -- npm install -g --silent "${missing[@]}")
-  else run npm install -g --silent "${missing[@]}"
+  if has mise; then (cd "$HOME" && act mise exec -- npm install -g --silent "${missing[@]}")
+  else act npm install -g --silent "${missing[@]}"
   fi
 }
 
@@ -165,7 +166,7 @@ mod_uv_apply() {
   while read -r name spec; do
     grep -qxF "$name" <<<"$have" && continue
     n=$((n + 1))
-    run uv tool install --quiet "${spec:-$name}" || rc=1
+    act uv tool install --quiet "${spec:-$name}" || rc=1
   done < <(list_lines uv.list)
   ((n)) || ok "uv: tools installed"
   return $rc

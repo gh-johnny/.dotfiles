@@ -1,0 +1,24 @@
+# Config checks for `dot verify`: is each stowed package not only linked, but read correctly by
+# its program? A check runs only when its stow package is on this host and its program exists.
+#
+#   STOW-PKG  PROGRAM  DESCRIPTION... :: COMMAND
+#
+# COMMAND runs in bash from $HOME (zsh goes through `script` for a real pty: p10k needs one); it passes when it exits 0 and prints nothing matching
+# /error|E[0-9]+:/i (programs that report bad config on stderr but exit 0, like nvim headless).
+
+zsh        zsh        interactive zsh starts clean, my functions defined :: out=$(script -qec "zsh -i -c 'whence -w ai ex >/dev/null'" /dev/null </dev/null 2>&1 | tr -d '\r' | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | grep -v '^[[:space:]]*$'); [[ -z $out ]] || { echo "$out"; false; }
+zsh        zsh        zshenv keeps the API key out of the environment   :: zsh -c '[[ -z ${ANTHROPIC_API_KEY:-} ]]'
+git        git        git reads my identity                             :: [[ $(git config --global user.email) == *@* ]]
+git        git        git reads the bifrost-safe index settings          :: [[ $(git config --global core.trustctime) == false ]]
+tmux       tmux       tmux reads .tmux.conf (prefix is C-Space)          :: tmux -L dot-verify -f ~/.tmux.conf start-server \; show -g prefix \; kill-server 2>&1 | grep -q C-Space
+nvim       nvim       neovim loads init.lua                             :: timeout 120 nvim --headless '+lua print(vim.g.mapleader == " " and "leader ok" or "no leader")' +qa 2>&1 | grep -q 'leader ok'
+starship   starship   starship.toml is valid                            :: starship print-config >/dev/null
+fastfetch  fastfetch  fastfetch config parses                           :: fastfetch --config ~/.config/fastfetch/config.jsonc --pipe -s title >/dev/null
+lazygit    lazygit    lazygit reads its config dir                      :: [[ $(lazygit --print-config-dir) == "$HOME/.config/lazygit" ]]
+btop       btop       btop.conf is in place                             :: grep -q '^color_theme' ~/.config/btop/btop.conf
+mise       mise       mise reads the stowed config                      :: mise config ls 2>&1 | grep -q 'config.toml'
+ssh        ssh        ssh parses my config                              :: ssh -G github.com >/dev/null
+ghostty    ghostty    ghostty config is valid                           :: ghostty +validate-config
+kitty      kitty      kitty config parses                               :: kitty --debug-config >/dev/null
+hypr       Hyprland   Hyprland config is valid                          :: Hyprland --verify-config
+waybar     waybar     waybar config declares its modules                :: grep -q '"modules-left"' ~/.config/waybar/config.jsonc

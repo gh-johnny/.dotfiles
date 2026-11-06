@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs inside a test container (see matrix.sh): bootstrap from the mounted repo, apply twice,
-# then report. POSIX sh: bash does not exist yet when this starts on Alpine.
+# status, verify, report. POSIX sh: bash does not exist yet when this starts on Alpine.
 #   in-container.sh MODE HOST     MODE = apply (as root) | user (as a sudo user) | names
+# With /out mounted, line traces and the verify report land there (DOT_TEST_TAG names them).
 mode=$1 host=$2
 export USER=root
 cd /
@@ -17,7 +18,8 @@ if [ "$mode" = user ]; then
   fi
   useradd -m -s /bin/sh tester 2>/dev/null || adduser -D -s /bin/sh tester
   mkdir -p /etc/sudoers.d && echo 'tester ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/tester
-  exec su tester -c "sh /src/dot/tests/in-container.sh apply-as-user $host"
+  [ -d /out ] && chmod 777 /out
+  exec su tester -c "DOT_TEST_TAG='${DOT_TEST_TAG:-}' DOT_TEST_DISTRO='${DOT_TEST_DISTRO:-}' sh /src/dot/tests/in-container.sh apply-as-user $host"
 fi
 if [ "$mode" = apply-as-user ]; then
   export USER=tester HOME=/home/tester
@@ -25,8 +27,11 @@ if [ "$mode" = apply-as-user ]; then
   mode=apply
 fi
 D=$HOME/projects/dotfiles/dot/bin/dot
+tag=${DOT_TEST_TAG:-$mode}
+if [ -d /out ]; then export DOT_TRACE="/out/$tag.trace"; report="/out/$tag.jsonl"; else report=/tmp/verify.jsonl; fi
+
 if [ "$mode" = names ]; then
-  sh /src/install.sh --from /src --only self --host "$host" --yes >/tmp/boot.log 2>&1 || { cat /tmp/boot.log; exit 1; }
+  DOT_TRACE='' sh /src/install.sh --from /src --only self --host "$host" --yes >/tmp/boot.log 2>&1 || { cat /tmp/boot.log; exit 1; }
   exec bash "$D" names
 fi
 
@@ -36,11 +41,6 @@ bash "$D" apply --host "$host" --yes >/tmp/run2.log 2>&1
 echo "RUN2_EXIT=$?"
 bash "$D" status >/tmp/status.log 2>&1
 echo "STATUS_EXIT=$?"
-if command -v zsh >/dev/null; then
-  # no TTY here: job control and p10k's gitstatus complain about that, not about the config
-  POWERLEVEL9K_DISABLE_GITSTATUS=true zsh -i -c 'echo ZSH_OK' </dev/null >/tmp/zsh.out 2>/tmp/zsh.raw
-  echo "ZSH_EXIT=$?"
-  grep -v "can't change option: monitor" /tmp/zsh.raw >/tmp/zsh.err
-fi
-for f in run1 run2 status; do echo "===== $f"; cat /tmp/$f.log; done
-echo "===== zsh stderr"; cat /tmp/zsh.err 2>/dev/null
+bash "$D" verify --report "$report" >/tmp/verify.log 2>&1
+echo "VERIFY_EXIT=$?"
+for f in run1 run2 status verify; do echo "===== $f"; cat /tmp/$f.log; done

@@ -1,0 +1,123 @@
+# dot: lint, unit tests with coverage, the distro matrix (names, apply, user, systemd) in
+# parallel, then one coverage report (lines + items) in the job summary. Weekly as well: distros
+# rename and drop packages without asking, and a Monday failure beats a broken new machine.
+name: dot
+
+on:
+  push:
+    paths: [dot/**, install.sh, .github/workflows/dot.yml, "*/.config/**", zsh/**, git/**, tmux/**, mise/**]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: dot-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOT_TEST_LOGS: ${{ github.workspace }}/.dot-tests
+  NO_COLOR: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: dot/tests/lint.sh
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build the test image (bats + kcov)
+        run: docker build -t dot-test -f dot/tests/Dockerfile dot/tests
+      - name: bats under kcov
+        run: |
+          mkdir -p .dot-tests/coverage
+          docker run --rm --security-opt seccomp=unconfined -e BATS_LIB_PATH=/usr/lib/bats \
+            -v "$PWD:/src:ro" -v "$PWD/.dot-tests/coverage:/out" -w /src/dot dot-test \
+            kcov --include-path=/src/dot/lib,/src/dot/modules,/src/dot/bin \
+                 --bash-parse-files-in-dir=/src/dot /out/unit bats --formatter tap tests/unit
+          cp .dot-tests/coverage/unit/bats.*/cobertura.xml .dot-tests/coverage/cobertura.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: .dot-tests/coverage/cobertura.xml
+
+  names:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [arch, manjaro, debian, debian12, ubuntu, mint, kali, fedora, alma, opensuse, void, alpine, nix]
+    steps:
+      - uses: actions/checkout@v4
+      - run: dot/tests/matrix.sh -m names -j 1 ${{ matrix.distro }}
+      - if: failure()
+        run: cat .dot-tests/names-${{ matrix.distro }}.log
+
+  apply:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mode: apply, distro: arch }
+          - { mode: apply, distro: manjaro }
+          - { mode: apply, distro: debian }
+          - { mode: apply, distro: debian12 }
+          - { mode: apply, distro: ubuntu }
+          - { mode: apply, distro: mint }
+          - { mode: apply, distro: kali }
+          - { mode: apply, distro: fedora }
+          - { mode: apply, distro: alma }
+          - { mode: apply, distro: opensuse }
+          - { mode: apply, distro: void }
+          - { mode: apply, distro: alpine }
+          - { mode: apply, distro: nix }
+          - { mode: user, distro: arch }
+          - { mode: user, distro: debian }
+          - { mode: user, distro: fedora }
+          - { mode: user, distro: alpine }
+          - { mode: systemd, distro: arch }
+          - { mode: systemd, distro: fedora }
+          - { mode: systemd, distro: debian }
+          - { mode: systemd, distro: ubuntu }
+    name: ${{ matrix.mode }} ${{ matrix.distro }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: dot/tests/matrix.sh -m ${{ matrix.mode }} -j 1 ${{ matrix.distro }}
+      - if: always()
+        run: tail -150 .dot-tests/${{ matrix.mode }}-${{ matrix.distro }}.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-${{ matrix.mode }}-${{ matrix.distro }}
+          path: .dot-tests/run/
+          if-no-files-found: ignore
+
+  coverage:
+    needs: [unit, apply]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: merge
+        run: |
+          mkdir -p runs
+          find artifacts -name '*.jsonl' -o -name '*.trace' | xargs -r cp -t runs
+          python3 dot/tests/coverage.py --cobertura artifacts/unit-coverage/cobertura.xml --runs runs \
+            --md coverage.md --json coverage.json --min-lines 80 --min-items 98
+      - if: always()
+        run: cat coverage.md >>"$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.md
+            coverage.json

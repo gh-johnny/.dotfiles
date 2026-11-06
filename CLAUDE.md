@@ -55,7 +55,7 @@ stow --dir=~/projects/dotfiles --target=$HOME -D <package>
 
 - What a machine gets = its host profile (`dot/hosts/*.conf`) → groups → the lists in
   `dot/manifest/`. A new tool goes in a list, never in an ad-hoc script.
-- Every command that changes the machine goes through `run`/`root` (`dot/lib/core.sh`) and must be
+- Every command that changes the machine goes through `act`/`root` (`dot/lib/core.sh`) and must be
   guarded by a check: a second `dot apply` has to print `DOT_CHANGES=0`.
 - Before claiming a change works: `dot status` here, and `dot/tests/matrix.sh [distro...]` for
   anything that touches backends, packages.list or install.sh (`-m names` checks package names).

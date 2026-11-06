@@ -14,20 +14,22 @@
 # `dot/tests/names.sh` checks every mapping against the real repos of each distro.
 
 # ── base: what dot itself and the shell config stand on ──────────────────────
-base  git
-base  curl
-base  zsh
-base  stow       slackpkg=-
-base  unzip
-base  less
+base  git        cmd=git
+base  curl       cmd=curl
+base  zsh        cmd=zsh
+base  stow       cmd=stow slackpkg=-
+base  unzip      cmd=unzip
+base  less       cmd=less
 base  build      pacman=base-devel apt=build-essential dnf=gcc,gcc-c++,make zypper=gcc,gcc-c++,make xbps=base-devel apk=build-base emerge=- slackpkg=- nix=-
 base  openssh    cmd=ssh apt=openssh-client dnf=openssh-clients zypper=openssh-clients apk=openssh-client emerge=net-misc/openssh
-base  keychain   emerge=net-misc/keychain slackpkg=-
-base  shadow     only=apk                     # chsh on Alpine
+base  keychain   cmd=keychain emerge=net-misc/keychain slackpkg=-
+base  shadow     cmd=chsh only=apk,nix            # chsh on Alpine and in nix images
+base  libatomic  pacman=- apt=libatomic1 dnf=libatomic zypper=libatomic1 xbps=libatomic apk=libatomic emerge=- slackpkg=- nix=-   # node from mise needs it
+base  script     cmd=script pacman=util-linux apt=bsdutils dnf=util-linux-script zypper=util-linux xbps=util-linux apk=util-linux-misc emerge=sys-apps/util-linux slackpkg=util-linux nix=util-linux   # a pty for dot verify
 base  procps     cmd=ps pacman=procps-ng dnf=procps-ng zypper=procps xbps=procps-ng apk=procps emerge=sys-process/procps slackpkg=procps-ng nix=procps
 
 # ── cli: the terminal, my way ────────────────────────────────────────────────
-cli   tmux
+cli   tmux       cmd=tmux
 cli   neovim     cmd=nvim apt=- mise=neovim     # Debian/Ubuntu ship versions too old for the plugins
 cli   fzf        cmd=fzf apt=- mise=fzf         # old Debian fzf lacks --zsh
 cli   ripgrep    cmd=rg mise=ripgrep

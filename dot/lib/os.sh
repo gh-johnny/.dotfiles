@@ -22,10 +22,11 @@ os_backend_for() {
 
 os_detect() {
   OS_ID='' OS_LIKE='' OS_NAME='' OS_VERSION=''
-  if [[ -r /etc/os-release ]]; then
+  local osr=${DOT_OS_RELEASE:-/etc/os-release} # tests point this at fixtures
+  if [[ -r $osr ]]; then
     eval "$(
-      # shellcheck disable=SC1091
-      . /etc/os-release
+      # shellcheck disable=SC1090
+      . "$osr"
       printf 'OS_ID=%q OS_LIKE=%q OS_NAME=%q OS_VERSION=%q' \
         "${ID:-}" "${ID_LIKE:-}" "${PRETTY_NAME:-${NAME:-}}" "${VERSION_ID:-}"
     )"

@@ -7,8 +7,12 @@ DOT_DRY=${DOT_DRY:-0}
 DOT_YES=${DOT_YES:-0}
 DOT_VERBOSE=${DOT_VERBOSE:-0}
 # Per-invocation scratch: change log, values one module hands to the next.
-DOT_RUN=$(mktemp -d "${TMPDIR:-/tmp}/dot.XXXXXX")
-trap 'rm -rf "$DOT_RUN"' EXIT
+# (A caller can hand one in, the unit tests do: bats owns the EXIT trap.)
+if [[ -z ${DOT_RUN:-} ]]; then
+  DOT_RUN=$(mktemp -d "${TMPDIR:-/tmp}/dot.XXXXXX")
+  trap 'rm -rf "$DOT_RUN"' EXIT
+fi
+mkdir -p "$DOT_RUN"
 : >"$DOT_RUN/changes"
 
 if [[ -t 1 && -z ${NO_COLOR:-} ]]; then
@@ -43,20 +47,20 @@ has() { command -v "$1" >/dev/null 2>&1; }
 # then dies of SIGPIPE, and under pipefail the whole pipeline reports failure.
 qgrep() { grep "$@" >/dev/null; }
 
-# run CMD...: every command that changes the machine goes through here. It is printed, counted
+# act CMD...: every command that changes the machine goes through here. It is printed, counted
 # when it succeeds (a second `dot apply` must count zero) and only echoed under --dry-run.
-run() {
+act() {
   printf '%s  $ %s%s\n' "$C_D" "$*" "$C_0"
   if [[ $DOT_DRY == 1 ]]; then printf '%s\n' "$*" >>"$DOT_RUN/changes"; return 0; fi
   "$@" || return
   printf '%s\n' "$*" >>"$DOT_RUN/changes"
 }
 
-# root CMD...: run() as root, through sudo when we are not root already.
+# root CMD...: act() as root, through sudo when we are not root already.
 root() {
-  if [[ $EUID -eq 0 ]]; then run "$@"
-  elif has sudo; then run sudo "$@"
-  elif has doas; then run doas "$@"
+  if [[ $EUID -eq 0 ]]; then act "$@"
+  elif has sudo; then act sudo "$@"
+  elif has doas; then act doas "$@"
   else err "needs root and there is no sudo/doas: $*"; return 1
   fi
 }
@@ -107,7 +111,7 @@ git_clone() {
   if ! online github.com && [[ $1 == *github.com* ]]; then
     warn "github.com is unreachable, skipping clone of $1"; return 1
   fi
-  run git clone --depth=1 --quiet "$1" "$2"
+  act git clone --depth=1 --quiet "$1" "$2"
 }
 
 # in_list WORD LIST...: is WORD one of LIST?

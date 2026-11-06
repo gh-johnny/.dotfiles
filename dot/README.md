@@ -34,7 +34,7 @@ Options: `--host NAME` (remembered in `~/.config/dot/host`), `--only m1,m2`, `--
 dot/
 ├── bin/dot              the CLI
 ├── lib/
-│   ├── core.sh          output, run() (the only way to change the machine), root(), confirm()
+│   ├── core.sh          output, act() (the only way to change the machine), root(), confirm()
 │   ├── os.sh            os-release + ID_LIKE → backend, init, libc, container, omarchy
 │   ├── pkg.sh           backend dispatch, batch install with one-by-one retry
 │   ├── pkg/<backend>.sh pacman apt dnf zypper xbps apk emerge slackpkg nix
