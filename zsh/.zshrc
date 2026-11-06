@@ -19,7 +19,9 @@ alias ll="ls -l"
 alias la="ls -a"
 alias lla="ls -la"
 
-alias docker-c-clean="docker stop $(docker ps -aq) && docker rm $(docker ps -aq)"
+alias docker-c-clean='docker stop $(docker ps -aq) && docker rm $(docker ps -aq)'  # single quotes: run when called, not at every shell start
+
+export ANTIGRAVITY_CONFIG_DIR="$HOME/config"
 
 alias ..="cd .."
 alias ...="cd ../../"
@@ -42,8 +44,7 @@ alias ssh-session='eval "$(ssh-agent -s)" && ssh-add $HOME/.ssh/gh'
 # Agent keys + per-LLM config live in config/agent-registry.json (run `ai` with no args to list).
 # bifrost ready: let what the other host already sent arrive before the agent starts (instant when synced)
 unalias ai 2>/dev/null
-ai() { bifrost ready; /home/jo/projects/ai-agents/scripts/launch-agent.sh "$@"; }
-
+ai() { command -v bifrost >/dev/null && bifrost ready; "$HOME/.local/bin/ai" "$@"; }
 
 export TERMINAL=alacritty
 
@@ -53,12 +54,10 @@ fpath=(~/projects/ai-agents/scripts/completions $fpath)  # ai launcher completio
 autoload -Uz compinit
 compinit
 # End of lines added by compinstall
-source ~/powerlevel10k/powerlevel10k.zsh-theme
+[[ -r ~/powerlevel10k/powerlevel10k.zsh-theme ]] && source ~/powerlevel10k/powerlevel10k.zsh-theme
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
-
-export TERMINAL=alacritty
 
 ex()
 {
@@ -102,11 +101,13 @@ alias j17='java17'
 alias j21='java21'
 alias j25='java25'
 
+alias dbeaver='JAVA_HOME="$JAVA_21_HOME" PATH="$JAVA_21_HOME/bin:$PATH" /usr/bin/dbeaver'
+
 # Show current Java version and home
 alias jv='echo "JAVA_HOME: $JAVA_HOME" && java -version'
 
 # pnpm
-export PNPM_HOME="/home/jo/.local/share/pnpm"
+export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
@@ -117,17 +118,25 @@ export PATH="$HOME/.local/bin:$PATH"
 export ANDROID_HOME=$HOME/Android/Sdk
 unset ANDROID_SDK_ROOT  # /etc/profile.d sets this to /opt/android-sdk; ANDROID_HOME takes precedence
 
-export PATH=$PATH:$ANDROID_HOME/platform-tools
+[[ -d $ANDROID_HOME ]] && export PATH=$PATH:$ANDROID_HOME/platform-tools
 
 # bun completions
-[ -s "/home/jo/.bun/_bun" ] && source "/home/jo/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
-. "$HOME/.local/share/../bin/env"
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"  # uv
 
-alias claude-mem='/home/jo/.bun/bin/bun "/home/jo/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs"'
+alias claude-mem='$HOME/.bun/bin/bun "$HOME/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs"'
 
-eval $(DISPLAY="" WAYLAND_DISPLAY="" SSH_ASKPASS="" keychain --eval --quiet --nogui ~/.ssh/gh)
+command -v keychain >/dev/null && [[ -f ~/.ssh/gh ]] && eval $(DISPLAY="" WAYLAND_DISPLAY="" SSH_ASKPASS="" keychain --eval --quiet --nogui ~/.ssh/gh)
+
+
+# mise tools on hosts without the ~/.local/bin symlinks (last: never shadows anything)
+[[ -d ~/.local/share/mise/shims ]] && export PATH="$PATH:$HOME/.local/share/mise/shims"
+
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

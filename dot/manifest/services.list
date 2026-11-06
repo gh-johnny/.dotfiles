@@ -1,0 +1,10 @@
+# Services and user groups, by group. Units that are not installed are skipped, so a line is
+# harmless on a host without the package.
+#
+#   GROUP  SCOPE  NAME  [BACKEND=other-name | BACKEND=-]
+#   SCOPE: system (boot unit) | user (systemd --user unit) | usergroup (add me to a Unix group)
+
+dev    system     docker
+dev    usergroup  docker
+dev    system     tailscaled
+sshd   system     sshd        apt=ssh

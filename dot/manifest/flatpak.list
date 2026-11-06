@@ -1,0 +1,17 @@
+# GUI apps from Flathub, by group, for desktops that are not Arch (there, arch.list and Omarchy
+# cover them). Used when the host sets DOT_FLATPAK=auto (off pacman) or 1.
+#
+#   GROUP  APP-ID
+
+apps      md.obsidian.Obsidian
+apps      com.spotify.Client
+apps      org.signal.Signal
+apps      io.typora.Typora
+apps      org.localsend.localsend_app
+apps      org.libreoffice.LibreOffice
+apps      com.obsproject.Studio
+apps      org.kde.kdenlive
+apps      com.github.PintaProject.Pinta
+apps      com.github.xournalpp.xournalpp
+db        io.dbeaver.DBeaverCommunity
+android   com.google.AndroidStudio

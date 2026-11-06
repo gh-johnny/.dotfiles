@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# dot — set this machine up my way, on any Linux, as many times as it takes. See dot/README.md.
+set -uo pipefail
+shopt -s extglob
+
+DOT_BIN=$(readlink -f "${BASH_SOURCE[0]}")
+DOT_ROOT=$(cd "$(dirname "$DOT_BIN")/.." && pwd)
+DOTFILES=$(cd "$DOT_ROOT/.." && pwd)
+DOT_VERSION=1
+
+# What dot installs must be visible to the checks that follow it in the same run.
+export PATH="$HOME/.local/bin:$PATH:$HOME/.local/share/mise/shims"
+
+# shellcheck source=../lib/core.sh
+source "$DOT_ROOT/lib/core.sh"
+# shellcheck source=../lib/os.sh
+source "$DOT_ROOT/lib/os.sh"
+# shellcheck source=../lib/pkg.sh
+source "$DOT_ROOT/lib/pkg.sh"
+# shellcheck source=../lib/manifest.sh
+source "$DOT_ROOT/lib/manifest.sh"
+for m in "$DOT_ROOT"/modules/*.sh; do
+  # shellcheck disable=SC1090
+  source "$m"
+done
+
+# The order modules run in. Omarchy first: it rewrites ~/.config, links have to come after it.
+DOT_ORDER=(self omarchy system flatpak links shell mise uv npm installers services ssh)
+
+usage() {
+  cat <<EOF
+dot — my machine, on any Linux
+
+usage: dot <command> [options]
+
+commands:
+  apply            make this machine match its host profile (safe to rerun: a second run changes nothing)
+  status           what is missing or drifted, changes nothing (exit 1 when something is off)
+  diff [PKG...]    show how real files that replaced links differ from the repo
+  capture          packages installed by hand that no list knows about
+  update           git pull the dotfiles, then apply
+  doctor           what dot sees: distro, backend, init, prerequisites, network
+  hosts            the host profiles there are
+  help             this
+
+options:
+  -H, --host NAME  host profile (remembered in ~/.config/dot/host)
+  -o, --only M,..  run only these modules
+  -s, --skip M,..  skip these modules
+  -n, --dry-run    print what would run, change nothing
+  -y, --yes        do not ask (installers that need a choice are skipped)
+  -v, --verbose    explain decisions
+
+modules, in order: ${DOT_ORDER[*]}
+EOF
+}
+
+DOT_HOST_ARG='' DOT_ONLY=() DOT_SKIP=() DOT_ARGS=()
+cmd=${1:-help}
+[[ $# -gt 0 ]] && shift
+DOT_FLAGS=("$@") # as given, for `update` to hand to apply
+while (($#)); do
+  case $1 in
+    -H | --host) DOT_HOST_ARG=${2:?--host needs a name}; shift ;;
+    --host=*) DOT_HOST_ARG=${1#*=} ;;
+    -o | --only) IFS=, read -ra DOT_ONLY <<<"${2:?}"; shift ;;
+    -s | --skip) IFS=, read -ra DOT_SKIP <<<"${2:?}"; shift ;;
+    -n | --dry-run) DOT_DRY=1 ;;
+    -y | --yes) DOT_YES=1 ;;
+    -v | --verbose) DOT_VERBOSE=1 ;;
+    -h | --help) usage; exit 0 ;;
+    -*) die "unknown option $1 (dot help)" ;;
+    *) DOT_ARGS+=("$1") ;;
+  esac
+  shift
+done
+
+# selected_modules: the host's modules, in DOT_ORDER, narrowed by --only/--skip.
+selected_modules() {
+  local m
+  for m in "${DOT_ORDER[@]}"; do
+    in_list "$m" "${DOT_MODULES[@]}" || continue
+    ((${#DOT_ONLY[@]})) && ! in_list "$m" "${DOT_ONLY[@]}" && continue
+    in_list "$m" "${DOT_SKIP[@]}" && continue
+    echo "$m"
+  done
+}
+
+setup() {
+  os_detect
+  pkg_load
+  host_pick "$DOT_HOST_ARG"
+  host_load
+  local m
+  for m in "${DOT_ONLY[@]}" "${DOT_SKIP[@]}"; do
+    in_list "$m" "${DOT_ORDER[@]}" || die "no module '$m' (modules: ${DOT_ORDER[*]})"
+  done
+}
+
+cmd_apply() {
+  setup
+  local log
+  mkdir -p "$DOT_STATE/logs"
+  log="$DOT_STATE/logs/apply-$(date +%Y%m%d-%H%M%S).log"
+  exec > >(tee >(sed -u 's/\x1b\[[0-9;]*m//g' >>"$log")) 2>&1
+  say "${C_B}dot apply${C_0} · host ${C_B}$DOT_HOST${C_0} · $(os_summary)"
+  [[ $DOT_DRY == 1 ]] && warn "dry run: nothing will change"
+  if [[ $EUID -ne 0 ]] && ! has sudo && ! has doas; then warn "no sudo/doas: system steps will fail"; fi
+  # ask for the sudo password once, up front
+  if [[ $DOT_DRY != 1 && $EUID -ne 0 ]] && has sudo && [[ -t 0 ]]; then sudo -v || die "sudo is needed"; fi
+
+  declare -F host_pre_apply >/dev/null && { section "host: pre"; host_pre_apply; }
+  local m failed=()
+  for m in $(selected_modules); do
+    section "$m"
+    "mod_${m}_apply" || failed+=("$m")
+  done
+  declare -F host_post_apply >/dev/null && { section "host: post"; host_post_apply || failed+=(host_post_apply); }
+  host_remember
+
+  local n
+  n=$(grep -c . "$DOT_RUN/changes")
+  say
+  if ((${#failed[@]})); then
+    err "done with failures in: ${failed[*]} · $n change(s) · log ${log/#$HOME/\~}"
+    say "DOT_CHANGES=$n"
+    return 1
+  fi
+  if ((n)); then ok "done · $n change(s) · log ${log/#$HOME/\~}"; else ok "nothing to change: this machine already matches '$DOT_HOST'"; fi
+  say "DOT_CHANGES=$n"
+}
+
+cmd_status() {
+  setup
+  say "${C_B}dot status${C_0} · host ${C_B}$DOT_HOST${C_0} · $(os_summary)"
+  local m out
+  for m in $(selected_modules); do
+    declare -F "mod_${m}_status" >/dev/null || continue
+    out=$("mod_${m}_status")
+    [[ -n $out ]] || continue
+    section "$m"
+    printf '%s\n' "$out"
+  done
+  say
+  if [[ -s $DOT_RUN/issues ]]; then
+    warn "$(grep -c miss "$DOT_RUN/issues") missing, $(grep -c drift "$DOT_RUN/issues") drifted · dot apply fixes both (drifted files go to the backup dir first)"
+    return 1
+  fi
+  ok "everything matches '$DOT_HOST'"
+}
+
+cmd_diff() { setup; links_diff "${DOT_ARGS[@]}"; }
+
+cmd_capture() {
+  setup
+  local list
+  list=$(system_capture)
+  if [[ -z $list ]]; then ok "every explicitly installed package is in a list"; return 0; fi
+  say "Installed by hand, in no list (add to dot/manifest/$([[ $OS_PKG == pacman ]] && echo arch.list || echo packages.list), or to ignore.list):"
+  printf '  %s\n' $list
+}
+
+cmd_update() {
+  info "pulling $DOTFILES"
+  git -C "$DOTFILES" pull --ff-only || die "git pull failed (local changes? diverged?)"
+  exec "$DOT_BIN" apply "${DOT_FLAGS[@]}"
+}
+
+cmd_doctor() {
+  os_detect
+  say "${C_B}dot doctor${C_0}"
+  say "  system   $(os_summary)"
+  say "  kernel   $(uname -r)"
+  say "  user     $(id -un) (uid $EUID)$([[ $EUID -ne 0 ]] && { has sudo && echo ', sudo' || echo ', NO sudo'; })"
+  say "  repo     $DOTFILES ($(git -C "$DOTFILES" rev-parse --abbrev-ref HEAD 2>/dev/null) $(git -C "$DOTFILES" rev-parse --short HEAD 2>/dev/null))"
+  say "  host     $(cat "$DOT_CONFIG/host" 2>/dev/null || echo '(not chosen yet)')"
+  [[ -f $DOT_ROOT/lib/pkg/${OS_PKG:-none}.sh ]] && report ok "backend $OS_PKG" || report miss "no backend for ${OS_PKG:-this system}"
+  [[ -f $DOT_ROOT/lib/init/$OS_INIT.sh ]] && report ok "init $OS_INIT" || report miss "no init adapter for $OS_INIT"
+  local t
+  for t in git curl stow bash zsh mise uv; do
+    if has "$t"; then report ok "$t $(command -v "$t")"; else report skip "$t not installed"; fi
+  done
+  for t in github.com aur.archlinux.org mise.run dl.flathub.org pypi.org; do
+    if online "$t"; then report ok "reach $t"; else report drift "cannot reach $t"; fi
+  done
+  [[ $OS_LIBC == musl ]] && warn "musl: mise tools and vendor installers that ship glibc binaries will not run"
+  [[ $OS_NIXOS == 1 ]] && warn "NixOS: dot handles your user (dotfiles, nix-env, mise); the system belongs in configuration.nix"
+  return 0
+}
+
+cmd_hosts() {
+  local h cur
+  cur=$(cat "$DOT_CONFIG/host" 2>/dev/null || true)
+  for h in $(host_list); do
+    printf '  %s %-8s %s\n' "$([[ $h == "$cur" ]] && echo '*' || echo ' ')" "$h" "$(host_describe "$h")"
+  done
+}
+
+case $cmd in
+  apply) cmd_apply ;;
+  status) cmd_status ;;
+  diff) cmd_diff ;;
+  capture) cmd_capture ;;
+  update) cmd_update ;;
+  doctor) cmd_doctor ;;
+  hosts) cmd_hosts ;;
+  help | -h | --help) usage ;;
+  version | --version) echo "dot $DOT_VERSION" ;;
+  *) err "unknown command '$cmd'"; usage; exit 2 ;;
+esac

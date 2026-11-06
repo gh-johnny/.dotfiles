@@ -1,0 +1,32 @@
+# Arch-only packages (pacman repos, or the AUR with "aur"), by group. Read on pacman systems only;
+# off Arch, GUI apps come from flatpak.list instead. Anything Omarchy installs is Omarchy's and
+# stays out of here (dot capture knows its lists).
+#
+#   GROUP  PACKAGE  [aur]
+
+desktop   ghostty
+desktop   wayfreeze
+desktop   vim
+desktop   net-tools
+desktop   sudo
+
+fonts     ttf-cascadia-mono-nerd
+fonts     ttf-jetbrains-mono-nerd
+fonts     noto-fonts-emoji
+fonts     noto-fonts-extra
+
+java      jdk17-openjdk
+java      jdk21-openjdk
+java      jdk25-openjdk
+
+dotnet    dotnet-sdk
+dotnet    dotnet-sdk-8.0
+dotnet    aspnet-runtime-8.0
+
+db        dbeaver
+db        mariadb
+
+android   android-studio                     aur
+android   android-sdk-cmdline-tools-latest   aur
+
+apps      obsidian-cli-git                   aur

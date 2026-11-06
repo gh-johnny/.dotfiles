@@ -1,0 +1,59 @@
+# Packages every distro can give me, by group. One line per thing I want:
+#
+#   GROUP  NAME  [BACKEND=pkg[,pkg]] [BACKEND=-] [mise=TOOL] [script=INSTALLER] [cmd=BIN] [only=BACKEND,...]
+#
+#   NAME            the package name, used as-is by every backend without its own KEY
+#   BACKEND=pkg     this backend calls it something else (pacman apt dnf zypper xbps apk emerge slackpkg nix)
+#   BACKEND=-       do not take it from this backend's repos (missing, or too old to be useful)
+#   mise=TOOL       when the repos do not have it (or BACKEND=-): install with mise instead
+#   script=NAME     ...or with that installers.list entry
+#   cmd=BIN         already on PATH, however it got there = done (avoids a second copy)
+#   only=a,b        only on these backends
+#
+# A name without BACKEND key and with a fallback is probed: the repos win when they carry it.
+# `dot/tests/names.sh` checks every mapping against the real repos of each distro.
+
+# ── base: what dot itself and the shell config stand on ──────────────────────
+base  git
+base  curl
+base  zsh
+base  stow       slackpkg=-
+base  unzip
+base  less
+base  build      pacman=base-devel apt=build-essential dnf=gcc,gcc-c++,make zypper=gcc,gcc-c++,make xbps=base-devel apk=build-base emerge=- slackpkg=- nix=-
+base  openssh    cmd=ssh apt=openssh-client dnf=openssh-clients zypper=openssh-clients apk=openssh-client emerge=net-misc/openssh
+base  keychain   emerge=net-misc/keychain slackpkg=-
+base  shadow     only=apk                     # chsh on Alpine
+base  procps     cmd=ps pacman=procps-ng dnf=procps-ng zypper=procps xbps=procps-ng apk=procps emerge=sys-process/procps slackpkg=procps-ng nix=procps
+
+# ── cli: the terminal, my way ────────────────────────────────────────────────
+cli   tmux
+cli   neovim     cmd=nvim apt=- mise=neovim     # Debian/Ubuntu ship versions too old for the plugins
+cli   fzf        cmd=fzf apt=- mise=fzf         # old Debian fzf lacks --zsh
+cli   ripgrep    cmd=rg mise=ripgrep
+cli   fd         cmd=fd apt=- dnf=fd-find mise=fd   # Debian names the binary fdfind
+cli   bat        cmd=bat apt=- mise=bat             # Debian names the binary batcat
+cli   eza        cmd=eza mise=eza
+cli   zoxide     cmd=zoxide mise=zoxide
+cli   lazygit    cmd=lazygit mise=lazygit
+cli   btop       cmd=btop mise=btop
+cli   fastfetch  cmd=fastfetch mise=fastfetch
+cli   jq         cmd=jq mise=jq
+cli   yq         cmd=yq mise=yq                 # python yq on Arch/Debian, the Go one from mise
+cli   tree       cmd=tree
+cli   dust       cmd=dust apt=du-dust mise=dust
+cli   starship   cmd=starship mise=starship
+
+# ── dev: building things ─────────────────────────────────────────────────────
+dev   github-cli     cmd=gh apt=gh dnf=gh zypper=gh apk=github-cli emerge=dev-util/github-cli nix=gh mise=gh
+dev   docker         cmd=docker apt=docker.io dnf=moby-engine emerge=app-containers/docker
+dev   docker-compose apt=docker-compose dnf=docker-compose zypper=docker-compose apk=docker-cli-compose emerge=app-containers/docker-compose
+dev   lazydocker     cmd=lazydocker mise=lazydocker
+dev   mise           cmd=mise script=mise
+dev   uv             cmd=uv script=uv
+dev   aws-cli        cmd=aws apt=awscli dnf=awscli2 zypper=aws-cli xbps=awscli apk=aws-cli emerge=app-admin/awscli nix=awscli2 mise=aws-cli
+dev   restic         cmd=restic mise=restic
+dev   tailscale      cmd=tailscale script=tailscale
+
+# ── sshd: reachable over SSH ─────────────────────────────────────────────────
+sshd  openssh-server cmd=sshd pacman=openssh xbps=openssh apk=openssh-server emerge=net-misc/openssh slackpkg=openssh nix=-

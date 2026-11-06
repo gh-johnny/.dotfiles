@@ -1,0 +1,17 @@
+# Explicitly installed packages `dot capture` should not report: hardware, boot, and what other
+# tools own. Not installed by anything.
+#
+#   BACKEND|*  PACKAGE
+
+pacman  intel-ucode
+pacman  amd-ucode
+pacman  sof-firmware
+pacman  efibootmgr
+pacman  evtest
+pacman  omarchy-chromium
+pacman  omarchy-keyring
+pacman  syncthing             # bifrost installs it (~/projects/bifrost)
+pacman  nvm                   # superseded by mise; kept until the zshrc stops sourcing it
+pacman  obsidian-cli-git-debug
+pacman  electron37
+pacman  accounts-qml-module

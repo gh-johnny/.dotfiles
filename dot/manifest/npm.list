@@ -1,0 +1,11 @@
+# Global npm packages, by group, installed on mise's node.
+#
+#   GROUP  PACKAGE
+
+ai        @openai/codex
+ai        @vibe-kit/grok-cli
+ai        ccstatusline
+ai        docx
+dev       @playwright/cli
+mobile    eas-cli
+mobile    @expo/ngrok
