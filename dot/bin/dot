@@ -8,6 +8,9 @@ DOT_ROOT=$(cd "$(dirname "$DOT_BIN")/.." && pwd)
 DOTFILES=$(cd "$DOT_ROOT/.." && pwd)
 DOT_VERSION=1
 
+USER=${USER:-$(id -un)} # docker and cron do not set it
+export USER
+
 # What dot installs must be visible to the checks that follow it in the same run.
 export PATH="$HOME/.local/bin:$PATH:$HOME/.local/share/mise/shims"
 
@@ -97,12 +100,18 @@ setup() {
   done
 }
 
+# _strip_colors: the log without escape codes, in pure bash (busybox sed has no -u, nix images no sed)
+_strip_colors() {
+  local l
+  while IFS= read -r l; do printf '%s\n' "${l//$'\e'\[*([0-9;])m/}"; done
+}
+
 cmd_apply() {
   setup
   local log
   mkdir -p "$DOT_STATE/logs"
   log="$DOT_STATE/logs/apply-$(date +%Y%m%d-%H%M%S).log"
-  exec > >(tee >(sed -u 's/\x1b\[[0-9;]*m//g' >>"$log")) 2>&1
+  exec > >(tee >(_strip_colors >>"$log")) 2>&1
   say "${C_B}dot apply${C_0} · host ${C_B}$DOT_HOST${C_0} · $(os_summary)"
   [[ $DOT_DRY == 1 ]] && warn "dry run: nothing will change"
   if [[ $EUID -ne 0 ]] && ! has sudo && ! has doas; then warn "no sudo/doas: system steps will fail"; fi
@@ -188,6 +197,31 @@ cmd_doctor() {
   return 0
 }
 
+# dot names: every packages.list mapping, checked against this distro's repos (for tests/names.sh).
+cmd_names() {
+  os_detect
+  pkg_load
+  pkg_refresh
+  declare -F be_prepare >/dev/null && be_prepare # EPEL & co: the names have to be judged with them
+  local group logical rest p bad=0 line
+  say "names on $(os_summary)"
+  while read -r group logical rest; do
+    # shellcheck disable=SC2086
+    pkg_parse "$logical" $rest
+    ((P_NA)) && continue
+    if [[ -z $P_SYS ]]; then
+      report skip "$group/$logical → ${P_MISE:+mise:$P_MISE}${P_SCRIPT:+script:$P_SCRIPT}"; continue
+    fi
+    line=''
+    for p in $P_SYS; do be_available "$p" || line+=" $p"; done
+    if [[ -z $line ]]; then report ok "$group/$logical ($P_SYS)"
+    elif [[ -n $P_MISE$P_SCRIPT ]]; then report skip "$group/$logical not packaged → ${P_MISE:+mise:$P_MISE}${P_SCRIPT:+script:$P_SCRIPT}"
+    else report miss "$group/$logical: no$line"; bad=1
+    fi
+  done < <(list_lines_all packages.list)
+  return $bad
+}
+
 cmd_hosts() {
   local h cur
   cur=$(cat "$DOT_CONFIG/host" 2>/dev/null || true)
@@ -204,6 +238,7 @@ case $cmd in
   update) cmd_update ;;
   doctor) cmd_doctor ;;
   hosts) cmd_hosts ;;
+  names) cmd_names ;;
   help | -h | --help) usage ;;
   version | --version) echo "dot $DOT_VERSION" ;;
   *) err "unknown command '$cmd'"; usage; exit 2 ;;

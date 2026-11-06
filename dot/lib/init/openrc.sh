@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # OpenRC (Alpine, Gentoo, Artix...). No user services.
 
-svc_enabled() { [[ $1 == system ]] && rc-update show default 2>/dev/null | grep -qE "^[[:space:]]*$2[[:space:]]"; }
+svc_enabled() { [[ $1 == system ]] && rc-update show default 2>/dev/null | qgrep -E "^[[:space:]]*$2[[:space:]]"; }
 svc_exists()  { [[ $1 == system && -x /etc/init.d/$2 ]]; }
 svc_enable() {
   [[ $1 == user ]] && { warn "openrc has no user services ($2)"; return 1; }

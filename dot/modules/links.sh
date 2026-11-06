@@ -25,6 +25,8 @@ _link_walk() {
       if [[ -L $p ]]; then anc=${p#"$HOME"/}; break; fi
       [[ -d $p ]] || break
     done
+    # a dir another package folded into one link: stow unfolds it when this package arrives
+    if [[ -n $anc && $(readlink -f "$HOME/$anc") == "$(readlink -f "$DOTFILES")"/* ]]; then anc=''; fi
     if [[ -n $anc ]]; then printf 'foreign\t%s\n' "$anc"
     elif [[ -L $t ]]; then printf 'foreign\t%s\n' "$rel"
     elif [[ ! -e $t ]]; then printf 'missing\t%s\n' "$rel"
@@ -51,9 +53,18 @@ _link_fallback() {
   done < <(find "$dir" -mindepth 1 \( -type f -o -type l \) ! -name .stow-local-ignore -print0)
 }
 
+# Dirs many packages share. In an empty home stow would fold the first package's ~/.config into
+# one symlink; real dirs keep every package's files side by side, as on a lived-in machine.
+LINK_SHARED_DIRS=(.config .local/bin .local/share .local/state .ssh)
+
 mod_links_apply() {
-  local pkg state rel rc=0 walk todo
+  local pkg state rel rc=0 walk todo d
   DOT_BACKUP="$DOT_STATE/backup/$(date +%Y%m%d-%H%M%S)"
+  for d in "${LINK_SHARED_DIRS[@]}"; do
+    [[ -e $HOME/$d || -L $HOME/$d ]] && continue
+    run mkdir -p "$HOME/$d"
+    [[ $d == .ssh ]] && run chmod 700 "$HOME/$d"
+  done
   for pkg in "${DOT_STOW[@]}"; do
     [[ -d $DOTFILES/$pkg ]] || { err "stow package '$pkg' does not exist"; rc=1; continue; }
     walk=$(_link_walk "$pkg")

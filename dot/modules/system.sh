@@ -17,15 +17,24 @@ system_plan() {
     # shellcheck disable=SC2086 # rest is KEY=VAL words
     pkg_parse "$logical" $rest
     ((P_NA)) && continue
-    if [[ -n $P_CMD ]] && has "$P_CMD"; then echo "$logical" >>"$DOT_RUN/plan-ok"; continue; fi
+    if [[ -n $P_CMD ]] && has "$P_CMD"; then
+      # satisfied by mise itself (an earlier run's fallback): still mise's, keep it in its config
+      if [[ -n $P_MISE && $(command -v "$P_CMD") == "${MISE_DATA_DIR:-$HOME/.local/share/mise}"/* ]]; then
+        printf '%s\t%s\n' "$logical" "$P_MISE" >>"$DOT_RUN/plan-mise"
+      else
+        echo "$logical" >>"$DOT_RUN/plan-ok"
+      fi
+      continue
+    fi
     if [[ -n $P_SYS ]]; then
       # shellcheck disable=SC2086
       missing=$(pkg_missing $P_SYS)
       if [[ -z $missing ]]; then echo "$logical" >>"$DOT_RUN/plan-ok"; continue; fi
-      if [[ $P_FIXED == 1 || -z $P_MISE$P_SCRIPT ]]; then
+      if [[ -z $P_MISE$P_SCRIPT ]]; then
         printf '%s\t%s\n' "$logical" "$(echo $missing)" >>"$DOT_RUN/plan-sys"; continue
       fi
-      # Default name and a fallback exists: take the repo package only if the repos have it.
+      # A fallback exists: take the repo package only if the repos have it (a name can exist in
+      # Debian 13 and not in 12, in Debian and not in Ubuntu...).
       avail=1
       for p in $missing; do pkg_available "$p" || { avail=0; break; }; done
       if ((avail)); then printf '%s\t%s\n' "$logical" "$(echo $missing)" >>"$DOT_RUN/plan-sys"; continue; fi

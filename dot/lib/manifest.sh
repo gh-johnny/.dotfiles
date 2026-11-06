@@ -105,7 +105,6 @@ list_lines_all() {
 #   P_MISE    mise tool to fall back to
 #   P_SCRIPT  installers.list entry to fall back to
 #   P_CMD     a command that, when on PATH, already satisfies it (however it got there)
-#   P_FIXED   1 when the backend has an explicit name (no availability probing needed)
 #   P_NA      1 when the line does not apply to this backend at all (only=)
 pkg_parse() {
   local logical=$1 kv k v only='' explicit='' has_explicit=0
@@ -121,8 +120,7 @@ pkg_parse() {
       "$OS_PKG") explicit=$v has_explicit=1 ;;
     esac
   done
-  P_FIXED=$has_explicit
-  if [[ -n $only && ",$only," != *",$OS_PKG,"* ]]; then P_SYS='' P_MISE='' P_SCRIPT='' P_FIXED=1 P_NA=1; return; fi
+  if [[ -n $only && ",$only," != *",$OS_PKG,"* ]]; then P_SYS='' P_MISE='' P_SCRIPT='' P_NA=1; return; fi
   if ((has_explicit)); then
     [[ $explicit == - ]] && P_SYS='' || P_SYS=${explicit//,/ }
   else

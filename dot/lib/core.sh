@@ -39,6 +39,10 @@ report() {
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# qgrep ARGS...: grep -q for the end of a pipeline. grep -q exits at the first match, the writer
+# then dies of SIGPIPE, and under pipefail the whole pipeline reports failure.
+qgrep() { grep "$@" >/dev/null; }
+
 # run CMD...: every command that changes the machine goes through here. It is printed, counted
 # when it succeeds (a second `dot apply` must count zero) and only echoed under --dry-run.
 run() {
@@ -83,14 +87,17 @@ fetch() {
   fi
 }
 
-# online HOST: can we reach it? (cached per run, 5s budget)
+# online HOST: can we reach it? Cached per run; two tries, flaky links are a thing.
 online() {
-  local host=$1 f="$DOT_RUN/online.${1//[^a-z0-9.]/_}"
+  local host=$1 f="$DOT_RUN/online.${1//[^a-z0-9.]/_}" i
   [[ -f $f ]] && { [[ $(<"$f") == 1 ]]; return; }
-  if has curl && curl -fsS -m 5 -o /dev/null "https://$host" 2>/dev/null; then echo 1 >"$f"
-  elif has wget && wget -q -T 5 -O /dev/null "https://$host" 2>/dev/null; then echo 1 >"$f"
-  else echo 0 >"$f"
-  fi
+  echo 0 >"$f"
+  for i in 1 2; do
+    if { has curl && curl -fsS -m 6 -o /dev/null "https://$host" 2>/dev/null; } ||
+      { ! has curl && has wget && wget -q -T 6 -O /dev/null "https://$host" 2>/dev/null; }; then
+      echo 1 >"$f"; break
+    fi
+  done
   [[ $(<"$f") == 1 ]]
 }
 

@@ -46,12 +46,12 @@ cli   starship   cmd=starship mise=starship
 
 # ── dev: building things ─────────────────────────────────────────────────────
 dev   github-cli     cmd=gh apt=gh dnf=gh zypper=gh apk=github-cli emerge=dev-util/github-cli nix=gh mise=gh
-dev   docker         cmd=docker apt=docker.io dnf=moby-engine emerge=app-containers/docker
-dev   docker-compose apt=docker-compose dnf=docker-compose zypper=docker-compose apk=docker-cli-compose emerge=app-containers/docker-compose
+dev   docker         cmd=docker apt=docker.io dnf=moby-engine emerge=app-containers/docker script=docker   # RHEL family: get.docker.com
+dev   docker-compose cmd=docker-compose apt=docker-compose dnf=docker-compose zypper=docker-compose apk=docker-cli-compose emerge=app-containers/docker-compose mise=docker-compose
 dev   lazydocker     cmd=lazydocker mise=lazydocker
 dev   mise           cmd=mise script=mise
 dev   uv             cmd=uv script=uv
-dev   aws-cli        cmd=aws apt=awscli dnf=awscli2 zypper=aws-cli xbps=awscli apk=aws-cli emerge=app-admin/awscli nix=awscli2 mise=aws-cli
+dev   aws-cli        cmd=aws apt=awscli dnf=awscli2 zypper=aws-cli apk=aws-cli emerge=app-admin/awscli nix=awscli2 mise=aws-cli
 dev   restic         cmd=restic mise=restic
 dev   tailscale      cmd=tailscale script=tailscale
 

@@ -12,3 +12,4 @@ ai   hermes        hermes        bash  https://hermes-agent.nousresearch.com/ins
 -    mise          mise          sh    https://mise.run
 -    uv            uv            sh    https://astral.sh/uv/install.sh
 -    tailscale     tailscale     sh    https://tailscale.com/install.sh
+-    docker        docker        sh    https://get.docker.com

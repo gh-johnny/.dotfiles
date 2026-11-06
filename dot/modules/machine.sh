@@ -55,7 +55,7 @@ mod_flatpak_apply() {
   mapfile -t want < <(_flatpak_wanted)
   ((${#want[@]})) || return 0
   if ! has flatpak; then pkg_install flatpak || return 1; hash -r; fi
-  flatpak remotes --user 2>/dev/null | grep -q '^flathub' ||
+  flatpak remotes --user 2>/dev/null | qgrep '^flathub' ||
     run flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || return 1
   for id in "${want[@]}"; do flatpak info --user "$id" >/dev/null 2>&1 || missing+=("$id"); done
   ((${#missing[@]})) || { ok "flatpak: apps installed"; return 0; }
@@ -147,8 +147,8 @@ _svc_lines() {
   done < <(list_lines services.list)
 }
 
-_in_group() { id -nG "$USER" 2>/dev/null | tr ' ' '\n' | grep -qxF "$1"; }
-_group_exists() { getent group "$1" >/dev/null 2>&1 || grep -q "^$1:" /etc/group; }
+_in_group() { id -nG "$USER" 2>/dev/null | tr ' ' '\n' | qgrep -xF "$1"; }
+_group_exists() { getent group "$1" >/dev/null 2>&1 || qgrep "^$1:" /etc/group; }
 
 mod_services_apply() {
   # shellcheck disable=SC1090

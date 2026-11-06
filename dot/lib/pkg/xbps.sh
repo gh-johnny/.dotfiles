@@ -14,7 +14,7 @@ be_explicit()  { xbps-query -m | sed 's/-[^-]*$//'; }
 # xbps refuses to install anything while xbps itself is out of date.
 be_prepare() {
   pkg_refresh_if_stale
-  if xbps-install -nu xbps 2>/dev/null | grep -q '^xbps-'; then
+  if xbps-install -nu xbps 2>/dev/null | qgrep '^xbps-'; then
     root xbps-install -yu xbps
   fi
   return 0

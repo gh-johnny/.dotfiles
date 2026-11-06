@@ -18,6 +18,7 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `kitty` | `~/.config/kitty/` |
 | `lazygit` | `~/.config/lazygit/` |
 | `mako` | `~/.config/mako/config` |
+| `mise` | `~/.config/mise/config.toml` (stowed `--no-folding`) |
 | `nvim` | `~/.config/nvim/` |
 | `ssh` | `~/.ssh/config` |
 | `starship` | `~/.config/starship.toml` |
@@ -27,6 +28,9 @@ Stow-based dotfiles for an Arch Linux + Hyprland machine. The repo lives at `~/p
 | `zsh` | `~/.zshrc`, `~/.p10k.zsh` |
 
 `archive/` holds old X11/i3 packages — not stowed, kept for reference.
+
+`dot/` is the machine setup tool (`dot apply|status|capture...`, see `dot/README.md`) and
+`install.sh` its POSIX bootstrap; `dot/` has a catch-all `.stow-local-ignore`.
 
 `bifrost/` (my ignore rules for bifrost sync) and `vps/` (the VPS's `~/.zshrc` and `ai` wrapper,
 installed by `vps/install.sh`) are not stow packages either: each has a catch-all
@@ -47,6 +51,16 @@ stow --dir=~/projects/dotfiles --target=$HOME --ignore='^archive$' */
 stow --dir=~/projects/dotfiles --target=$HOME -D <package>
 ```
 
+## dot (machine setup)
+
+- What a machine gets = its host profile (`dot/hosts/*.conf`) → groups → the lists in
+  `dot/manifest/`. A new tool goes in a list, never in an ad-hoc script.
+- Every command that changes the machine goes through `run`/`root` (`dot/lib/core.sh`) and must be
+  guarded by a check: a second `dot apply` has to print `DOT_CHANGES=0`.
+- Before claiming a change works: `dot status` here, and `dot/tests/matrix.sh [distro...]` for
+  anything that touches backends, packages.list or install.sh (`-m names` checks package names).
+- Off Arch, never trust a package name from memory: run the names matrix.
+
 ## Adding a new package
 
 1. Create `<package>/<stow-mirror-path>/` inside this repo.
@@ -58,7 +72,7 @@ stow --dir=~/projects/dotfiles --target=$HOME -D <package>
 ## Key rules
 
 - **Dotfiles is source of truth.** Never edit config files directly on the machine unless you immediately commit the change here too. Since every file is a symlink into this repo, editing via any editor already edits the repo.
-- **README.md and setup.sh must always reflect reality.** When a package is added/removed, a tool changes, or the setup process shifts, update both files immediately — they are living documents, not snapshots.
+- **README.md, dot/README.md and the dot manifests must always reflect reality.** When a package is added/removed, a tool changes, or the setup process shifts, update them immediately — they are living documents, not snapshots.
 - `mako` is stowed from dotfiles. The config includes omarchy's theme via `include=~/.config/omarchy/current/theme/mako.ini`, so omarchy theming still applies — user overrides come after the include.
 - `nvim` has no standalone git repo anymore — this is the only copy.
 - `btop/themes/current.theme` is a symlink to omarchy's theme — that is intentional.

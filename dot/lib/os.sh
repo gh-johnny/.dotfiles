@@ -66,13 +66,13 @@ os_detect() {
   fi
 
   OS_LIBC=glibc
-  if compgen -G '/lib/ld-musl-*' >/dev/null || { has ldd && ldd --version 2>&1 | grep -qi musl; }; then
+  if compgen -G '/lib/ld-musl-*' >/dev/null || { has ldd && ldd --version 2>&1 | qgrep -i musl; }; then
     OS_LIBC=musl
   fi
   OS_ARCH=$(uname -m)
 
   OS_CONTAINER=0
-  if [[ -f /.dockerenv || -f /run/.containerenv ]] || grep -qaE 'docker|containerd|podman|lxc' /proc/1/cgroup 2>/dev/null; then
+  if [[ -f /.dockerenv || -f /run/.containerenv ]] || qgrep -aE 'docker|containerd|podman|lxc' /proc/1/cgroup 2>/dev/null; then
     OS_CONTAINER=1
   fi
 }

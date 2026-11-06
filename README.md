@@ -1,6 +1,8 @@
 # dotfiles
 
-Personal dotfiles for Arch Linux + Hyprland, managed with [GNU Stow](https://www.gnu.org/software/stow/).
+Personal dotfiles for Arch Linux + Hyprland, managed with [GNU Stow](https://www.gnu.org/software/stow/),
+and **`dot`**: the tool that sets up a machine from them on any Linux (Arch, Debian/Ubuntu and
+derivatives, Fedora/RHEL, openSUSE, Void, Alpine, Gentoo, Slackware, NixOS). See [`dot/README.md`](dot/README.md).
 
 ## Stack
 
@@ -32,6 +34,8 @@ dotfiles/
 ├── hypr/         → ~/.config/hypr/
 ├── kitty/        → ~/.config/kitty/
 ├── lazygit/      → ~/.config/lazygit/
+├── mako/         → ~/.config/mako/config
+├── mise/         → ~/.config/mise/config.toml (stowed --no-folding: dot writes conf.d/ beside it)
 ├── nvim/         → ~/.config/nvim/
 ├── ssh/          → ~/.ssh/config
 ├── starship/     → ~/.config/starship.toml
@@ -39,6 +43,8 @@ dotfiles/
 ├── walker/       → ~/.config/walker/
 ├── waybar/       → ~/.config/waybar/
 ├── zsh/          → ~/.zshrc, ~/.p10k.zsh
+├── dot/          (the setup tool — not stowed)
+├── install.sh    (bootstrap: bash + git + curl, the checkout, then dot apply)
 ├── bifrost/      (my ignore rules for bifrost sync — not stowed)
 ├── vps/          (the VPS's ~/.zshrc and `ai` wrapper — not stowed, see below)
 └── archive/      (old X11/i3 configs — not stowed)
@@ -46,41 +52,21 @@ dotfiles/
 
 ## Fresh machine setup
 
-Run the guided setup script — it handles everything in order:
-
 ```bash
-bash ~/projects/dotfiles/setup.sh
+# from nothing (any distro): pick the profile with --host, or get asked
+curl -fsSL https://raw.githubusercontent.com/gh-johnny/.dotfiles/main/install.sh | sh -s -- --host pc
+
+# or from a checkout
+bash ~/projects/dotfiles/install.sh --host pc
 ```
 
-Or manually, step by step:
+Profiles: `cli` (terminal only, any distro), `dev`, `desktop`, `pc` (this Arch + Omarchy PC),
+`vps`. After the first run `dot` is on PATH: `dot status` shows drift, `dot apply` fixes it,
+`dot capture` lists packages installed by hand that no list knows about. Everything else:
+[`dot/README.md`](dot/README.md).
 
-```bash
-# 1. Install yay (AUR helper)
-sudo pacman -S --needed base-devel git
-git clone https://aur.archlinux.org/yay-git.git /tmp/yay-git && (cd /tmp/yay-git && makepkg -si)
-
-# 2. Clone the repo
-git clone git@github.com:gh-johnny/.dotfiles.git ~/projects/dotfiles
-
-# 3. Install stow and link all packages (archive/ excluded — legacy X11/i3 configs)
-sudo pacman -S stow
-stow --dir=~/projects/dotfiles --target=$HOME --ignore='^archive$' */
-
-# 4. Set zsh as default shell + install Powerlevel10k
-sudo pacman -S zsh keychain
-chsh -s /usr/bin/zsh
-git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ~/powerlevel10k
-
-# 5. Install Omarchy (Hyprland/Wayland experience)
-git clone https://github.com/basecamp/omarchy.git ~/.local/share/omarchy
-bash ~/.local/share/omarchy/install.sh
-
-# 6. Clone TPM for tmux plugins
-git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-# Then inside tmux: <prefix> + I to install plugins
-```
-
-> See `setup.sh` for the full staged install including terminals, fonts, dev tools, and apps. `mako` is managed by omarchy — do not stow it.
+Left manual on purpose: adding `~/.ssh/gh.pub` to GitHub, `ssh-add ~/.ssh/gh` once, and
+rebooting into the Hyprland session after Omarchy's first install.
 
 ## Day-to-day workflow
 
@@ -92,7 +78,12 @@ git add -p
 git commit
 ```
 
-### Adding a new package
+### Installing something new
+
+Add it to the right list in `dot/manifest/` (or run `dot capture` later to find what you forgot),
+then `dot apply`. A new stow package also goes into a host's `DOT_STOW`.
+
+### Adding a new stow package
 
 ```bash
 # 1. Create the stow structure
