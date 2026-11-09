@@ -14,6 +14,7 @@
 # A distro passes when: the second apply changes nothing, no module fails, `dot verify` passes
 # every item. Where github.com dropped out during the run (it is visible in the log), only the
 # steps that need it (shell plugins, mise downloads) may fail and only their commands may repeat.
+# Set DOT_TEST_ALLOW_NETWORK_FAILURES=0 to require every check, including network-dependent ones.
 #
 # Out: ~/.cache/dot-tests/<mode>-<distro>.log, and under run/ the verify reports (.jsonl) and
 # line traces (.trace) tests/coverage.py turns into the coverage report.
@@ -115,7 +116,7 @@ GITHUB_OPS='git clone|mise install|install_plugins|installer-|mise/conf.d|uv too
 
 verdict() {
   local d=$1 log=$2 secs=$3 report=$4 why=() m flaky=0
-  grep -q 'github.com is unreachable\|api.github.com\|github.com.*timed out' "$log" && flaky=1
+  if [[ ${DOT_TEST_ALLOW_NETWORK_FAILURES:-1} == 1 ]] && grep -q 'github.com is unreachable\|api.github.com\|github.com.*timed out' "$log"; then flaky=1; fi
 
   # the second run: nothing may change (commands that needed github may retry where it dropped out)
   local repeated

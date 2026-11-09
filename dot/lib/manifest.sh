@@ -108,7 +108,7 @@ list_lines_all() {
 #   P_VER     what `dot verify` runs it with ('-': do not run it, just check it is there)
 #   P_NA      1 when the line does not apply to this backend at all (only=)
 pkg_parse() {
-  local logical=$1 kv k v only='' explicit='' has_explicit=0
+  local logical=$1 kv k v only='' explicit='' has_explicit=0 os_explicit='' os_rank=0 id rank
   shift
   P_MISE='' P_SCRIPT='' P_CMD='' P_NA=0 P_VER=
   for kv; do
@@ -120,8 +120,18 @@ pkg_parse() {
       ver) P_VER=$v ;;
       only) only=$v ;;
       "$OS_PKG") explicit=$v has_explicit=1 ;;
+      os_*)
+        rank=1
+        for id in ${OS_ID:-} ${OS_LIKE:-}; do
+          if [[ $k == "os_$id" && ( $os_rank == 0 || $rank -lt $os_rank ) ]]; then
+            os_explicit=$v os_rank=$rank
+          fi
+          rank=$((rank + 1))
+        done
+        ;;
     esac
   done
+  if ((os_rank)); then explicit=$os_explicit has_explicit=1; fi
   if [[ -n $only && ",$only," != *",$OS_PKG,"* ]]; then P_SYS='' P_MISE='' P_SCRIPT='' P_NA=1; return; fi
   if ((has_explicit)); then
     [[ $explicit == - ]] && P_SYS='' || P_SYS=${explicit//,/ }

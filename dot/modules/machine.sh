@@ -211,7 +211,10 @@ mod_services_apply() {
       system | user)
         [[ $OS_NIXOS == 1 && $scope == system ]] && { warn "NixOS: enable $name in configuration.nix"; continue; }
         svc_exists "$scope" "$name" || { debug "$scope unit $name is not installed"; continue; }
-        svc_enabled "$scope" "$name" && continue
+        if svc_enabled "$scope" "$name"; then
+          # systemd units may be enabled by the distro but not yet running.
+          if [[ $OS_INIT != systemd || $OS_INIT_LIVE != 1 ]] || svc_active "$scope" "$name"; then continue; fi
+        fi
         svc_enable "$scope" "$name" || rc=1
         ;;
     esac

@@ -4,6 +4,7 @@
 #
 #   NAME            the package name, used as-is by every backend without its own KEY
 #   BACKEND=pkg     this backend calls it something else (pacman apt dnf zypper xbps apk emerge slackpkg nix)
+#   os_ID=pkg       override the backend for an os-release ID or ID_LIKE (ID takes precedence)
 #   BACKEND=-       do not take it from this backend's repos (missing, or too old to be useful)
 #   mise=TOOL       when the repos do not have it (or BACKEND=-): install with mise instead
 #   script=NAME     ...or with that installers.list entry
@@ -29,7 +30,7 @@ base  openssh    cmd=ssh apt=openssh-client dnf=openssh-clients zypper=openssh-c
 base  keychain   cmd=keychain emerge=net-misc/keychain slackpkg=-
 base  shadow     cmd=chsh ver=- only=apk,nix            # chsh on Alpine and in nix images
 base  libatomic  pacman=- apt=libatomic1 dnf=libatomic zypper=libatomic1 xbps=libatomic apk=libatomic emerge=- slackpkg=- nix=-   # node from mise needs it
-base  script     cmd=script pacman=util-linux apt=bsdutils dnf=util-linux-script zypper=util-linux xbps=util-linux apk=util-linux-misc emerge=sys-apps/util-linux slackpkg=util-linux nix=util-linux   # a pty for dot verify
+base  script     cmd=script pacman=util-linux apt=bsdutils dnf=util-linux-script os_rhel=util-linux zypper=util-linux xbps=util-linux apk=util-linux-misc emerge=sys-apps/util-linux slackpkg=util-linux nix=util-linux   # a pty for dot verify
 base  procps     cmd=ps pacman=procps-ng dnf=procps-ng zypper=procps xbps=procps-ng apk=procps emerge=sys-process/procps slackpkg=procps-ng nix=procps
 
 # ── cli: the terminal, my way ────────────────────────────────────────────────

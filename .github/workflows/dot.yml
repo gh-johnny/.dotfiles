@@ -17,6 +17,8 @@ concurrency:
 
 env:
   DOT_TEST_LOGS: ${{ github.workspace }}/.dot-tests
+  # A network interruption must not turn an incomplete test into a passing CI job.
+  DOT_TEST_ALLOW_NETWORK_FAILURES: "0"
   NO_COLOR: "1"
 
 jobs:
@@ -56,6 +58,12 @@ jobs:
       - run: dot/tests/matrix.sh -m names -j 1 ${{ matrix.distro }}
       - if: failure()
         run: cat .dot-tests/names-${{ matrix.distro }}.log
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-names-${{ matrix.distro }}
+          path: .dot-tests/names-${{ matrix.distro }}.log
+          if-no-files-found: ignore
 
   apply:
     runs-on: ubuntu-latest
@@ -96,7 +104,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: run-${{ matrix.mode }}-${{ matrix.distro }}
-          path: .dot-tests/run/
+          path: |
+            .dot-tests/run/
+            .dot-tests/${{ matrix.mode }}-${{ matrix.distro }}.log
           if-no-files-found: ignore
 
   coverage:

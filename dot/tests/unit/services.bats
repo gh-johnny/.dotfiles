@@ -56,3 +56,20 @@ L
   assert_success
   [[ $(changes) == 0 ]]
 }
+
+@test "services apply starts enabled but inactive systemd units" {
+  manifest services.list <<'L'
+g system docker
+L
+  OS_PKG=pacman OS_INIT=systemd OS_INIT_LIVE=1 OS_NIXOS=0
+  systemctl() {
+    case "$*" in
+      'cat docker'|'is-enabled -q docker') return 0 ;;
+      'is-active docker') echo inactive; return 3 ;;
+    esac
+  }
+  root() { echo "ROOT $*"; }
+  run mod_services_apply
+  assert_success
+  assert_output 'ROOT systemctl enable --now --no-block docker'
+}

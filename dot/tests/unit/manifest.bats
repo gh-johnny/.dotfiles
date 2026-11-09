@@ -15,6 +15,16 @@ setup() { load helper; load_dot; }
   assert_equal "$P_SYS" "base-devel"
 }
 
+@test "distribution overrides take precedence over backend and ID_LIKE" {
+  OS_PKG=dnf OS_ID=almalinux OS_LIKE='rhel fedora'
+  pkg_parse script os_rhel=util-linux dnf=util-linux-script os_almalinux=alma-script
+  assert_equal "$P_SYS" alma-script
+  OS_ID=rocky pkg_parse script os_rhel=util-linux dnf=util-linux-script
+  assert_equal "$P_SYS" util-linux
+  OS_ID=fedora OS_LIKE='' pkg_parse script os_rhel=util-linux dnf=util-linux-script
+  assert_equal "$P_SYS" util-linux-script
+}
+
 @test "backend=- means not from these repos, the fallback stays" {
   OS_PKG=apt pkg_parse neovim cmd=nvim apt=- mise=neovim
   assert_equal "$P_SYS" ""
