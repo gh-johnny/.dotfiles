@@ -179,14 +179,15 @@ mod_uv_apply() {
   fi
   have=$(_uv_tools)
   local n=0
-  local opt py
-  while read -r name spec opt; do
+  local opt opts py
+  while read -r name spec opts; do
+    installer_unsupported "${spec:-} ${opts:-}" && { warn "uv $name: needs glibc, this is $OS_LIBC; skipping"; continue; }
     grep -qxF "$name" <<<"$have" && continue
     n=$((n + 1))
     # py=X.Y: a Python the tool has wheels for (a brand-new system Python means compiling them)
-    [[ $spec == py=* ]] && { opt=$spec; spec=''; }
+    case $spec in py=*|libc=*) opts="$spec ${opts:-}"; spec='' ;; esac
     py=()
-    [[ ${opt:-} == py=* ]] && py=(--python "${opt#py=}")
+    for opt in ${opts:-}; do [[ $opt == py=* ]] && py=(--python "${opt#py=}"); done
     act uv tool install --quiet "${py[@]}" "${spec:-$name}" || rc=1
   done < <(list_lines uv.list)
   ((n)) || ok "uv: tools installed"
@@ -194,11 +195,12 @@ mod_uv_apply() {
 }
 
 mod_uv_status() {
-  local name spec have
+  local name spec opts have
   [[ -n $(list_lines uv.list) ]] || return 0
   has uv || { report miss "uv"; return 0; }
   have=$(_uv_tools)
-  while read -r name spec; do
-    if grep -qxF "$name" <<<"$have"; then report ok "uv $name"; else report miss "uv $name (${spec:-$name})"; fi
+  while read -r name spec opts; do
+    if installer_unsupported "${spec:-} ${opts:-}"; then report skip "uv $name (needs glibc)"
+    elif grep -qxF "$name" <<<"$have"; then report ok "uv $name"; else report miss "uv $name (${spec:-$name})"; fi
   done < <(list_lines uv.list)
 }

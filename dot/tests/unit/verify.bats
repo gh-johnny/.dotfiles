@@ -16,6 +16,17 @@ setup() {
   [[ $(grep -c . "$V_TSV") == 2 ]]
 }
 
+@test "verify marks a glibc-only uv tool inapplicable on musl" {
+  manifest uv.list <<'L'
+g only-glibc only-glibc[proxy]==1 py=3.13 libc=glibc
+L
+  DOT_MODULES=(uv) OS_LIBC=musl
+  uv() { :; }
+  verify_tools >/dev/null
+  run cat "$V_TSV"
+  assert_line --regexp $'^skip\tuv\tonly-glibc\tneeds glibc'
+}
+
 @test "_runs accepts the first version flag that works" {
   run _runs bash
   assert_success

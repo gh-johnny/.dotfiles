@@ -152,11 +152,12 @@ verify_services() {
 }
 
 verify_tools() {
-  local name spec have check shell url p
+  local name spec opts have check shell url p
   if in_list uv "${DOT_MODULES[@]}" && [[ -n $(list_lines uv.list) ]]; then
     have=$(has uv && _uv_tools)
-    while read -r name spec; do
-      grep -qxF "$name" <<<"$have" && vrec pass uv "$name" || vrec fail uv "$name" "not installed"
+    while read -r name spec opts; do
+      if installer_unsupported "${spec:-} ${opts:-}"; then vrec skip uv "$name" "needs glibc"
+      elif grep -qxF "$name" <<<"$have"; then vrec pass uv "$name"; else vrec fail uv "$name" "not installed"; fi
     done < <(list_lines uv.list)
   fi
   if in_list npm "${DOT_MODULES[@]}" && [[ -n $(list_lines npm.list) ]]; then

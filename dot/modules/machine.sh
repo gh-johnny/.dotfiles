@@ -123,7 +123,11 @@ mod_shell_apply() {
     if git_clone https://github.com/tmux-plugins/tpm "$TPM_DIR"; then
       # install the plugins tmux.conf lists, without opening tmux
       if has tmux && [[ -x $TPM_DIR/bin/install_plugins ]] && _tmux_plugins_missing; then
-        act "$TPM_DIR/bin/install_plugins" >/dev/null || rc=1
+        if [[ ${OS_CONTAINER:-0} == 1 && -z ${TMUX_TMPDIR:-} ]]; then
+          TMUX_TMPDIR=$DOT_RUN act "$TPM_DIR/bin/install_plugins" >/dev/null || rc=1
+        else
+          act "$TPM_DIR/bin/install_plugins" >/dev/null || rc=1
+        fi
       fi
     else rc=1
     fi

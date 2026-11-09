@@ -27,6 +27,22 @@ setup() { load helper; load_dot; }
   ! _tmux_plugins_missing
 }
 
+@test "tmux plugin install uses a private socket directory in a container" {
+  DOT_STOW=(tmux) DOT_SHELL=sh OS_CONTAINER=1 OS_NIXOS=0
+  TPM_DIR="$HOME/.tmux/plugins/tpm"
+  mkdir -p "$TPM_DIR/bin"
+  touch "$TPM_DIR/bin/install_plugins"
+  chmod +x "$TPM_DIR/bin/install_plugins"
+  _shell_path() { echo /bin/sh; }
+  _is_login_shell() { return 0; }
+  git_clone() { return 0; }
+  _tmux_plugins_missing() { return 0; }
+  has() { return 0; }
+  act() { printf '%s\n' "${TMUX_TMPDIR:-unset}" >"$BATS_TEST_TMPDIR/tmux-dir"; }
+  mod_shell_apply
+  assert_equal "$(cat "$BATS_TEST_TMPDIR/tmux-dir")" "$DOT_RUN"
+}
+
 @test "neovim plugins: lazy.nvim absent is reported as such" {
   run _nvim_plugins_missing
   assert_failure

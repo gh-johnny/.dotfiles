@@ -74,6 +74,22 @@ L
   assert_line --index 1 headroom-ai
 }
 
+@test "uv skips glibc-only tools on musl and preserves other python options" {
+  manifest uv.list <<'L'
+g only-glibc only-glibc[proxy]==1 py=3.13 libc=glibc
+g portable py=3.12
+L
+  OS_LIBC=musl DOT_DRY=1
+  uv() { :; }
+  run mod_uv_apply
+  assert_success
+  assert_output --partial 'uv only-glibc: needs glibc'
+  assert_output --partial 'uv tool install --quiet --python 3.12 portable'
+  refute_output --partial 'uv tool install --quiet --python 3.13'
+  run mod_uv_status
+  assert_output --partial 'uv only-glibc (needs glibc)'
+}
+
 @test "npm globals are read from parseable output" {
   _npm() { printf '/x/lib\n/x/lib/node_modules/@openai/codex\n/x/lib/node_modules/eas-cli\n'; }
   run _npm_global
